@@ -1,0 +1,14 @@
+﻿node_modules/
+dist/
+dist-ssr/
+.env
+.env.local
+.env.*.local
+*.log
+*.csv
+*.tsv
+data_audit/
+.vscode/*
+!.vscode/extensions.json
+.idea
+.DS_Store

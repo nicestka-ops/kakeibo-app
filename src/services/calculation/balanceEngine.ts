@@ -1,0 +1,208 @@
+import { Account, Transaction } from '@/types';
+
+export interface AccountBalanceMap {
+  [accountId: string]: number;
+}
+
+export interface FinancialSummary {
+  totalAssets: number;
+  totalLiabilities: number;
+  netAssets: number;
+}
+
+export interface MonthlyCashFlow {
+  income: number;
+  expense: number;
+  netSavings: number;
+}
+
+/**
+ * 全口座の残高を計算する。
+ * - openingBalance を起点に、取引履歴を順に適用する
+ * - asOfDate を指定すると、その日付以前の取引のみ対象
+ * - transfer は transfer_out（引き落とし）/ transfer_in（入金）の2エントリ方式
+ */
+export function calculateAccountBalances(
+  accounts: Account[],
+  transactions: Transaction[],
+  asOfDate?: string
+): AccountBalanceMap {
+  const balances: AccountBalanceMap = {};
+
+  // 初期残高のセット（口座の開設日が asOfDate より後なら0）
+  for (const acc of accounts) {
+    if (!asOfDate || acc.openingBalanceDate <= asOfDate) {
+      balances[acc.id] = Math.round(acc.openingBalance);
+    } else {
+      balances[acc.id] = 0;
+    }
+  }
+
+  // IDの重複を防ぐためセットで管理
+  const seenIds = new Set<string>();
+
+  for (const tx of transactions) {
+    // 日付フィルタ
+    if (asOfDate && tx.date > asOfDate) continue;
+
+    // 同一IDの二重計上を防ぐ
+    if (seenIds.has(tx.id)) continue;
+    seenIds.add(tx.id);
+
+    const amount = Math.round(Math.abs(tx.amount));
+    if (!(tx.accountId in balances)) {
+      balances[tx.accountId] = 0;
+    }
+
+    switch (tx.type) {
+      case 'income':
+      case 'adjustment':
+      case 'transfer_in':
+        balances[tx.accountId] += amount;
+        break;
+
+      case 'expense':
+      case 'transfer_out':
+        balances[tx.accountId] -= amount;
+        break;
+
+      // 旧方式 'transfer' は単一エントリ（移動元から引くのみ）。
+      // 新規入力では transfer_out/transfer_in を使うため、
+      // インポートデータとの後方互換のため残しておく。
+      case 'transfer':
+        balances[tx.accountId] -= amount;
+        break;
+
+      case 'card_payment': {
+        // クレジットカード口座への card_payment は残高を増やす（負債を減らす）
+        // 銀行口座への card_payment は残高を減らす（引き落とし）
+        const acc = accounts.find((a) => a.id === tx.accountId);
+        if (acc && acc.type === 'credit_card') {
+          balances[tx.accountId] += amount;
+        } else {
+          balances[tx.accountId] -= amount;
+        }
+        break;
+      }
+
+      default:
+        balances[tx.accountId] -= amount;
+    }
+  }
+
+  return balances;
+}
+
+/**
+ * 総資産・総負債・純資産を計算する。
+ * - クレジットカードの残高が負なら負債として計上
+ * - includeInAssets=false の口座は計算対象外
+ */
+export function calculateFinancialSummary(
+  accounts: Account[],
+  balances: AccountBalanceMap
+): FinancialSummary {
+  let totalAssets = 0;
+  let totalLiabilities = 0;
+
+  for (const acc of accounts) {
+    if (!acc.isActive) continue;
+    const balance = balances[acc.id] ?? 0;
+
+    if (acc.type === 'credit_card') {
+      if (balance < 0) {
+        totalLiabilities += Math.abs(balance);
+      } else if (acc.includeInAssets) {
+        totalAssets += balance;
+      }
+    } else {
+      if (acc.includeInAssets) {
+        if (balance >= 0) {
+          totalAssets += balance;
+        } else {
+          totalLiabilities += Math.abs(balance);
+        }
+      }
+    }
+  }
+
+  return {
+    totalAssets,
+    totalLiabilities,
+    netAssets: totalAssets - totalLiabilities,
+  };
+}
+
+/**
+ * 指定月のキャッシュフローを計算する。
+ * - transfer_in/out は収入・支出として計上しない（口座間移動）
+ * - card_payment も収支に含めない（別途カテゴリ分析で扱う）
+ */
+export function calculateMonthlyCashFlow(
+  transactions: Transaction[],
+  yearMonth: string
+): MonthlyCashFlow {
+  let income = 0;
+  let expense = 0;
+
+  for (const tx of transactions) {
+    if (!tx.date.startsWith(yearMonth)) continue;
+    const amount = Math.round(Math.abs(tx.amount));
+
+    if (tx.type === 'income') {
+      income += amount;
+    } else if (tx.type === 'expense') {
+      expense += amount;
+    }
+  }
+
+  return {
+    income,
+    expense,
+    netSavings: income - expense,
+  };
+}
+
+/**
+ * 指定月のカテゴリ別支出内訳を返す。
+ */
+export function calculateCategoryBreakdown(
+  transactions: Transaction[],
+  yearMonth: string
+): Record<string, number> {
+  const breakdown: Record<string, number> = {};
+
+  for (const tx of transactions) {
+    if (!tx.date.startsWith(yearMonth) || tx.type !== 'expense') continue;
+    const catId = tx.categoryId || 'uncategorized';
+    const amount = Math.round(Math.abs(tx.amount));
+    breakdown[catId] = (breakdown[catId] || 0) + amount;
+  }
+
+  return breakdown;
+}
+
+/**
+ * 過去N ヶ月分の月別収支トレンドを返す。
+ */
+export function generateMonthlyTrend(
+  transactions: Transaction[],
+  monthsCount: number = 6
+): Array<{ month: string; income: number; expense: number; balance: number }> {
+  const result: Array<{ month: string; income: number; expense: number; balance: number }> = [];
+  const now = new Date();
+
+  for (let i = monthsCount - 1; i >= 0; i--) {
+    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+    const ym = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+    const flow = calculateMonthlyCashFlow(transactions, ym);
+    result.push({
+      month: ym,
+      income: flow.income,
+      expense: flow.expense,
+      balance: flow.netSavings,
+    });
+  }
+
+  return result;
+}
