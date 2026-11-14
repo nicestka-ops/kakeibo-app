@@ -1,4 +1,4 @@
-﻿# 家計簿アプリ (kakeibo-app) 仕様書
+# 家計簿アプリ (kakeibo-app) 仕様書
 
 ## 1. 概要
 本プロジェクトは、Base44で運用していた家計簿アプリの優れたUXと機能を継承し、**React + Vite + TypeScript + Tailwind CSS** で構築された完全独立型のモダンWebアプリケーションです。
