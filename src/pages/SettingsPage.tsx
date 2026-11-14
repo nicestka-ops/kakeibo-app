@@ -8,10 +8,31 @@ import { Moon, Sun, Monitor, Download, Upload, RefreshCw, ShieldCheck, Database,
 
 export const SettingsPage: React.FC = () => {
   const { transactions, accounts, categories, resetToDefaultData, addTransaction } = useApp();
-  const { user, loading: authLoading, isConfigured, authError, signInWithGoogle, signOut, clearAuthError } = useAuth();
+  const {
+    user,
+    loading: authLoading,
+    isConfigured,
+    isEnvConfigured,
+    configuredUrl,
+    authError,
+    signInWithGoogle,
+    signOut,
+    saveSupabaseConfig,
+    resetSupabaseConfig,
+    clearAuthError,
+  } = useAuth();
   const { theme, setTheme } = useTheme();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [showDangerZone, setShowDangerZone] = useState(false);
+  const [supabaseUrlInput, setSupabaseUrlInput] = useState(configuredUrl || '');
+  const [supabaseAnonKeyInput, setSupabaseAnonKeyInput] = useState('');
+
+  const handleSaveSupabaseConfig = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!supabaseUrlInput.trim() || !supabaseAnonKeyInput.trim()) return;
+    saveSupabaseConfig(supabaseUrlInput, supabaseAnonKeyInput);
+    setSupabaseAnonKeyInput('');
+  };
 
   const accountMap = new Map(accounts.map((a) => [a.id, a.name]));
   const categoryMap = new Map(categories.map((c) => [c.id, c.name]));
@@ -196,19 +217,56 @@ export const SettingsPage: React.FC = () => {
           )}
 
           {!isConfigured ? (
-            <div className="flex items-start gap-3.5 p-3.5 rounded-2xl bg-amber-50 dark:bg-amber-950/20 border border-amber-200/80 dark:border-amber-900/50">
-              <div className="w-10 h-10 rounded-xl bg-amber-500/10 text-amber-600 dark:text-amber-400 flex items-center justify-center shrink-0">
-                <Database className="w-5 h-5" />
-              </div>
-              <div className="space-y-1">
-                <div className="flex items-center gap-2">
-                  <span className="font-bold text-sm text-slate-800 dark:text-slate-100">Supabase が未設定です</span>
-                  <span className="text-[10px] font-extrabold px-2 py-0.5 rounded-full bg-amber-100 dark:bg-amber-950/60 text-amber-700 dark:text-amber-300">LOCAL-ONLY</span>
+            <div className="space-y-4">
+              <div className="flex items-start gap-3.5 p-3.5 rounded-2xl bg-amber-50 dark:bg-amber-950/20 border border-amber-200/80 dark:border-amber-900/50">
+                <div className="w-10 h-10 rounded-xl bg-amber-500/10 text-amber-600 dark:text-amber-400 flex items-center justify-center shrink-0">
+                  <Database className="w-5 h-5" />
                 </div>
-                <p className="text-xs text-slate-500 dark:text-slate-400 leading-relaxed">
-                  Google ログインを有効にするには、プロジェクトルートの <code className="px-1 py-0.5 rounded bg-slate-200/70 dark:bg-slate-800">.env.local</code>（本番環境は GitHub Secrets）に <code className="px-1 py-0.5 rounded bg-slate-200/70 dark:bg-slate-800">VITE_SUPABASE_URL</code> と <code className="px-1 py-0.5 rounded bg-slate-200/70 dark:bg-slate-800">VITE_SUPABASE_ANON_KEY</code> を設定してください。
-                </p>
+                <div className="space-y-1">
+                  <div className="flex items-center gap-2">
+                    <span className="font-bold text-sm text-slate-800 dark:text-slate-100">Supabase 接続設定を入力してください</span>
+                    <span className="text-[10px] font-extrabold px-2 py-0.5 rounded-full bg-amber-100 dark:bg-amber-950/60 text-amber-700 dark:text-amber-300">未設定</span>
+                  </div>
+                  <p className="text-xs text-slate-500 dark:text-slate-400 leading-relaxed">
+                    Supabase プロジェクトの URL と Anon Key を入力すると、このブラウザ上でそのまま Google ログインが利用できるようになります（GitHub Secrets に設定すれば全端末で入力不要になります）。
+                  </p>
+                </div>
               </div>
+
+              <form onSubmit={handleSaveSupabaseConfig} className="space-y-3 p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-100 dark:border-slate-800">
+                <div>
+                  <label className="block text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1">
+                    Project URL (`VITE_SUPABASE_URL`)
+                  </label>
+                  <input
+                    type="url"
+                    required
+                    placeholder="https://xxxxxxxxxxxx.supabase.co"
+                    value={supabaseUrlInput}
+                    onChange={(e) => setSupabaseUrlInput(e.target.value)}
+                    className="w-full px-3 py-2 text-sm bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500 text-slate-900 dark:text-slate-100"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1">
+                    Anon Public Key (`VITE_SUPABASE_ANON_KEY`)
+                  </label>
+                  <input
+                    type="password"
+                    required
+                    placeholder="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+                    value={supabaseAnonKeyInput}
+                    onChange={(e) => setSupabaseAnonKeyInput(e.target.value)}
+                    className="w-full px-3 py-2 text-sm bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500 text-slate-900 dark:text-slate-100"
+                  />
+                </div>
+                <button
+                  type="submit"
+                  className="px-4 py-2 text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl shadow-sm transition"
+                >
+                  接続設定を保存して有効化
+                </button>
+              </form>
             </div>
           ) : authLoading ? (
             <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/60 text-xs text-slate-400">
@@ -273,6 +331,18 @@ export const SettingsPage: React.FC = () => {
               >
                 <LogIn className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
                 <span>Google でログイン</span>
+              </button>
+            </div>
+          )}
+
+          {isConfigured && !isEnvConfigured && (
+            <div className="flex items-center justify-between text-xs text-slate-400 px-1">
+              <span className="truncate">接続先: {configuredUrl}</span>
+              <button
+                onClick={resetSupabaseConfig}
+                className="text-rose-500 hover:underline font-semibold shrink-0 ml-2"
+              >
+                接続設定を解除
               </button>
             </div>
           )}

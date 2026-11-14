@@ -1,35 +1,62 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
-import { Session, User } from '@supabase/supabase-js';
-import { isSupabaseConfigured, supabase } from '@/lib/supabase';
+import { Session, SupabaseClient, User } from '@supabase/supabase-js';
+import {
+  clearStoredSupabaseConfig,
+  createSupabaseClientFromConfig,
+  getEffectiveSupabaseConfig,
+  hasEnvSupabaseConfig,
+  saveStoredSupabaseConfig,
+} from '@/lib/supabase';
 
 interface AuthContextType {
   user: User | null;
   session: Session | null;
   loading: boolean;
   isConfigured: boolean;
+  isEnvConfigured: boolean;
+  configuredUrl: string | null;
   authError: string | null;
   signInWithGoogle: () => Promise<void>;
   signOut: () => Promise<void>;
+  saveSupabaseConfig: (url: string, anonKey: string) => void;
+  resetSupabaseConfig: () => void;
   clearAuthError: () => void;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const [client, setClient] = useState<SupabaseClient | null>(() =>
+    createSupabaseClientFromConfig(getEffectiveSupabaseConfig())
+  );
+  const [configuredUrl, setConfiguredUrl] = useState<string | null>(
+    () => getEffectiveSupabaseConfig()?.url ?? null
+  );
   const [session, setSession] = useState<Session | null>(null);
   const [user, setUser] = useState<User | null>(null);
-  const [loading, setLoading] = useState<boolean>(isSupabaseConfigured);
+  const [loading, setLoading] = useState<boolean>(() => Boolean(getEffectiveSupabaseConfig()));
   const [authError, setAuthError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!supabase) {
+    const params = new URLSearchParams(window.location.search);
+    const errorDesc = params.get('error_description') || params.get('error');
+    if (errorDesc) {
+      setAuthError(decodeURIComponent(errorDesc));
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!client) {
+      setSession(null);
+      setUser(null);
       setLoading(false);
       return;
     }
 
     let isMounted = true;
+    setLoading(true);
 
-    supabase.auth
+    client.auth
       .getSession()
       .then(({ data, error }) => {
         if (!isMounted) return;
@@ -40,6 +67,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           setUser(data.session?.user ?? null);
         }
         setLoading(false);
+
+        const params = new URLSearchParams(window.location.search);
+        if (params.has('code')) {
+          params.delete('code');
+          const nextSearch = params.toString();
+          const nextUrl = `${window.location.pathname}${nextSearch ? `?${nextSearch}` : ''}${window.location.hash}`;
+          window.history.replaceState(null, '', nextUrl);
+        }
       })
       .catch((err) => {
         if (!isMounted) return;
@@ -49,7 +84,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange((_event, nextSession) => {
+    } = client.auth.onAuthStateChange((_event, nextSession) => {
       if (!isMounted) return;
       setSession(nextSession);
       setUser(nextSession?.user ?? null);
@@ -60,17 +95,17 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       isMounted = false;
       subscription.unsubscribe();
     };
-  }, []);
+  }, [client]);
 
   const signInWithGoogle = async () => {
-    if (!supabase) {
-      setAuthError('Supabase の環境変数が設定されていません。');
+    if (!client) {
+      setAuthError('Supabase の接続設定が未完了です。設定画面から URL と Anon Key を設定してください。');
       return;
     }
 
     setAuthError(null);
     const redirectTo = `${window.location.origin}${import.meta.env.BASE_URL}`;
-    const { error } = await supabase.auth.signInWithOAuth({
+    const { error } = await client.auth.signInWithOAuth({
       provider: 'google',
       options: {
         redirectTo,
@@ -83,12 +118,34 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const signOut = async () => {
-    if (!supabase) return;
+    if (!client) return;
     setAuthError(null);
-    const { error } = await supabase.auth.signOut();
+    const { error } = await client.auth.signOut();
     if (error) {
       setAuthError(error.message);
     }
+  };
+
+  const saveSupabaseConfig = (url: string, anonKey: string) => {
+    try {
+      const normalized = saveStoredSupabaseConfig(url, anonKey);
+      const nextClient = createSupabaseClientFromConfig(normalized);
+      setClient(nextClient);
+      setConfiguredUrl(normalized.url);
+      setAuthError(null);
+    } catch (err) {
+      setAuthError(err instanceof Error ? err.message : 'Supabase 設定の保存に失敗しました');
+    }
+  };
+
+  const resetSupabaseConfig = () => {
+    clearStoredSupabaseConfig();
+    const effective = getEffectiveSupabaseConfig();
+    setClient(createSupabaseClientFromConfig(effective));
+    setConfiguredUrl(effective?.url ?? null);
+    setSession(null);
+    setUser(null);
+    setAuthError(null);
   };
 
   const clearAuthError = () => setAuthError(null);
@@ -99,10 +156,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         user,
         session,
         loading,
-        isConfigured: isSupabaseConfigured,
+        isConfigured: Boolean(client),
+        isEnvConfigured: hasEnvSupabaseConfig,
+        configuredUrl,
         authError,
         signInWithGoogle,
         signOut,
+        saveSupabaseConfig,
+        resetSupabaseConfig,
         clearAuthError,
       }}
     >

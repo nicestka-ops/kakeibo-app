@@ -1,5 +1,5 @@
 // Service Worker for kakeibo PWA
-const CACHE_NAME = 'kakeibo-v1';
+const CACHE_NAME = 'kakeibo-v2';
 const STATIC_ASSETS = [
   './',
   './index.html',
@@ -37,9 +37,30 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // Skip cross-origin requests
+  // Skip cross-origin requests and OAuth callback requests
   const url = new URL(event.request.url);
   if (url.origin !== location.origin) {
+    return;
+  }
+  if (url.searchParams.has('code') || url.searchParams.has('error')) {
+    return;
+  }
+
+  // Use network-first for navigation requests so updates and OAuth redirects always get fresh HTML
+  if (event.request.mode === 'navigate') {
+    event.respondWith(
+      fetch(event.request)
+        .then((networkResponse) => {
+          if (networkResponse.ok) {
+            const responseClone = networkResponse.clone();
+            caches.open(CACHE_NAME).then((cache) => {
+              cache.put('./index.html', responseClone);
+            });
+          }
+          return networkResponse;
+        })
+        .catch(() => caches.match('./index.html'))
+    );
     return;
   }
 
