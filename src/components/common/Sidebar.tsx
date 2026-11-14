@@ -1,6 +1,7 @@
 import React from 'react';
 import { NavLink } from 'react-router-dom';
-import { X } from 'lucide-react';
+import { X, LogIn, LogOut, User as UserIcon } from 'lucide-react';
+import { useAuth } from '@/contexts/AuthContext';
 import {
   LayoutDashboard,
   Receipt,
@@ -29,6 +30,59 @@ interface SidebarProps {
 }
 
 export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
+  const { user, isConfigured, signInWithGoogle, signOut } = useAuth();
+
+  const renderAuthFooter = () => (
+    <div className="pt-4 mt-auto border-t border-slate-100 dark:border-slate-800 space-y-3">
+      {isConfigured && (
+        user ? (
+          <div className="flex items-center justify-between gap-2 px-2 py-2 rounded-xl bg-slate-50 dark:bg-slate-800/60">
+            <div className="flex items-center gap-2.5 min-w-0">
+              {user.user_metadata?.avatar_url ? (
+                <img
+                  src={user.user_metadata.avatar_url}
+                  alt={user.user_metadata?.full_name || 'アバター'}
+                  className="w-8 h-8 rounded-full object-cover shrink-0"
+                  referrerPolicy="no-referrer"
+                />
+              ) : (
+                <div className="w-8 h-8 rounded-full bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 flex items-center justify-center shrink-0">
+                  <UserIcon className="w-4 h-4" />
+                </div>
+              )}
+              <div className="min-w-0">
+                <p className="text-xs font-bold text-slate-700 dark:text-slate-200 truncate">
+                  {user.user_metadata?.full_name || user.user_metadata?.name || 'Google ユーザー'}
+                </p>
+                <p className="text-[10px] text-slate-400 truncate">{user.email}</p>
+              </div>
+            </div>
+            <button
+              onClick={signOut}
+              title="ログアウト"
+              aria-label="ログアウト"
+              className="p-1.5 text-slate-400 hover:text-rose-500 rounded-lg hover:bg-slate-200/60 dark:hover:bg-slate-700 transition shrink-0"
+            >
+              <LogOut className="w-4 h-4" />
+            </button>
+          </div>
+        ) : (
+          <button
+            onClick={signInWithGoogle}
+            className="w-full flex items-center justify-center gap-2 px-3 py-2 text-xs font-bold bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-950/40 dark:hover:bg-emerald-950/70 text-emerald-700 dark:text-emerald-300 rounded-xl transition"
+          >
+            <LogIn className="w-4 h-4" />
+            <span>Google でログイン</span>
+          </button>
+        )
+      )}
+      <div className="text-xs text-slate-400 px-3">
+        <p className="font-medium text-slate-500 dark:text-slate-400">独立型モダン家計簿</p>
+        <p className="text-[11px] text-slate-400 mt-0.5">v1.0.0 (Local-First)</p>
+      </div>
+    </div>
+  );
+
   return (
     <>
       {/* Mobile/Tablet overlay sidebar */}
@@ -81,10 +135,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
           })}
         </nav>
 
-        <div className="pt-4 mt-auto border-t border-slate-100 dark:border-slate-800 text-xs text-slate-400 px-3">
-          <p className="font-medium text-slate-500 dark:text-slate-400">独立型モダン家計簿</p>
-          <p className="text-[11px] text-slate-400 mt-0.5">v1.0.0 (Local-First)</p>
-        </div>
+        {renderAuthFooter()}
       </aside>
 
       {/* Desktop permanent sidebar */}
@@ -124,10 +175,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
           })}
         </nav>
 
-        <div className="pt-4 mt-auto border-t border-slate-100 dark:border-slate-800 text-xs text-slate-400 px-3">
-          <p className="font-medium text-slate-500 dark:text-slate-400">独立型モダン家計簿</p>
-          <p className="text-[11px] text-slate-400 mt-0.5">v1.0.0 (Local-First)</p>
-        </div>
+        {renderAuthFooter()}
       </aside>
     </>
   );

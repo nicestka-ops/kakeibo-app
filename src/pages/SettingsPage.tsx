@@ -1,12 +1,14 @@
 import React, { useRef, useState } from 'react';
 import { useApp } from '@/contexts/AppContext';
+import { useAuth } from '@/contexts/AuthContext';
 import { useTheme } from '@/contexts/ThemeContext';
 import { Card } from '@/components/common/Card';
 import { exportTransactionsCSV, importTransactionsCSV } from '@/services/migration/csvImporter';
-import { Moon, Sun, Monitor, Download, Upload, RefreshCw, ShieldCheck, Database, Palette, Bell, Key, Trash2 } from 'lucide-react';
+import { Moon, Sun, Monitor, Download, Upload, RefreshCw, ShieldCheck, Database, Palette, Bell, Key, Trash2, LogIn, LogOut, User as UserIcon } from 'lucide-react';
 
 export const SettingsPage: React.FC = () => {
   const { transactions, accounts, categories, resetToDefaultData, addTransaction } = useApp();
+  const { user, loading: authLoading, isConfigured, authError, signInWithGoogle, signOut, clearAuthError } = useAuth();
   const { theme, setTheme } = useTheme();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [showDangerZone, setShowDangerZone] = useState(false);
@@ -55,9 +57,9 @@ export const SettingsPage: React.FC = () => {
   };
 
   const handleReset = () => {
-    if (confirm('現在のデータをリセットして初期サンプルに戻しますか？\nこの操作は元に戻せません。')) {
+    if (confirm('現在のデータをリセットして初期状態（空）に戻しますか？\nこの操作は元に戻せません。')) {
       resetToDefaultData();
-      alert('初期サンプルデータにリセットしました。');
+      alert('初期状態（空）にリセットしました。');
     }
   };
 
@@ -164,8 +166,8 @@ export const SettingsPage: React.FC = () => {
                 <RefreshCw className="w-5 h-5" />
               </div>
               <div>
-                <h4 className="font-bold text-sm text-slate-800 dark:text-slate-100">初期サンプルデータに戻す</h4>
-                <p className="text-xs text-slate-400">データを初期状態にリセットします</p>
+                <h4 className="font-bold text-sm text-slate-800 dark:text-slate-100">初期状態（空）にリセット</h4>
+                <p className="text-xs text-slate-400">取引・口座・目標などのデータを空の状態に戻します</p>
               </div>
             </div>
             <button
@@ -178,21 +180,102 @@ export const SettingsPage: React.FC = () => {
         </div>
       </Card>
 
-      {/* Cloud Sync */}
-      <Card title="クラウド同期（Supabase）">
-        <div className="flex items-start gap-3.5">
-          <div className="w-10 h-10 rounded-xl bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 flex items-center justify-center shrink-0">
-            <Database className="w-5 h-5" />
-          </div>
-          <div className="space-y-1">
-            <div className="flex items-center gap-2">
-              <span className="font-bold text-sm text-slate-800 dark:text-slate-100">Local-First モードで動作中（無料・オフライン対応）</span>
-              <span className="text-[10px] font-extrabold px-2 py-0.5 rounded-full bg-emerald-100 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300">ACTIVE</span>
+      {/* Cloud Sync & Google Auth */}
+      <Card title="アカウント・クラウド連携（Supabase Auth）">
+        <div className="space-y-4">
+          {authError && (
+            <div className="p-3 rounded-xl bg-rose-50 dark:bg-rose-950/30 border border-rose-200 dark:border-rose-800 flex items-center justify-between gap-2">
+              <p className="text-xs text-rose-600 dark:text-rose-400">{authError}</p>
+              <button
+                onClick={clearAuthError}
+                className="text-xs font-bold text-rose-600 dark:text-rose-400 hover:underline shrink-0"
+              >
+                閉じる
+              </button>
             </div>
-            <p className="text-xs text-slate-400 leading-relaxed">
-              現在、無料かつ完全にプライベートなローカルストレージで動作しています。将来的に複数デバイスで同期を行う場合は、Supabase（無料プラン）の接続情報を設定することで即座にクラウド同期へ切り替え可能です。
-            </p>
-          </div>
+          )}
+
+          {!isConfigured ? (
+            <div className="flex items-start gap-3.5 p-3.5 rounded-2xl bg-amber-50 dark:bg-amber-950/20 border border-amber-200/80 dark:border-amber-900/50">
+              <div className="w-10 h-10 rounded-xl bg-amber-500/10 text-amber-600 dark:text-amber-400 flex items-center justify-center shrink-0">
+                <Database className="w-5 h-5" />
+              </div>
+              <div className="space-y-1">
+                <div className="flex items-center gap-2">
+                  <span className="font-bold text-sm text-slate-800 dark:text-slate-100">Supabase が未設定です</span>
+                  <span className="text-[10px] font-extrabold px-2 py-0.5 rounded-full bg-amber-100 dark:bg-amber-950/60 text-amber-700 dark:text-amber-300">LOCAL-ONLY</span>
+                </div>
+                <p className="text-xs text-slate-500 dark:text-slate-400 leading-relaxed">
+                  Google ログインを有効にするには、プロジェクトルートの <code className="px-1 py-0.5 rounded bg-slate-200/70 dark:bg-slate-800">.env.local</code>（本番環境は GitHub Secrets）に <code className="px-1 py-0.5 rounded bg-slate-200/70 dark:bg-slate-800">VITE_SUPABASE_URL</code> と <code className="px-1 py-0.5 rounded bg-slate-200/70 dark:bg-slate-800">VITE_SUPABASE_ANON_KEY</code> を設定してください。
+                </p>
+              </div>
+            </div>
+          ) : authLoading ? (
+            <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/60 text-xs text-slate-400">
+              認証状態を確認中...
+            </div>
+          ) : user ? (
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-3.5 rounded-2xl bg-emerald-50/60 dark:bg-emerald-950/20 border border-emerald-200/70 dark:border-emerald-900/50">
+              <div className="flex items-center gap-3.5 min-w-0">
+                {user.user_metadata?.avatar_url ? (
+                  <img
+                    src={user.user_metadata.avatar_url}
+                    alt={user.user_metadata?.full_name || 'Google アバター'}
+                    className="w-11 h-11 rounded-full object-cover border border-emerald-200 dark:border-emerald-800 shrink-0"
+                    referrerPolicy="no-referrer"
+                  />
+                ) : (
+                  <div className="w-11 h-11 rounded-full bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 flex items-center justify-center shrink-0">
+                    <UserIcon className="w-5 h-5" />
+                  </div>
+                )}
+                <div className="min-w-0">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="font-bold text-sm text-slate-800 dark:text-slate-100 truncate">
+                      {user.user_metadata?.full_name || user.user_metadata?.name || 'Google ユーザー'}
+                    </span>
+                    <span className="text-[10px] font-extrabold px-2 py-0.5 rounded-full bg-emerald-100 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300">
+                      ログイン中
+                    </span>
+                  </div>
+                  <p className="text-xs text-slate-500 dark:text-slate-400 truncate mt-0.5">
+                    {user.email}
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={signOut}
+                className="flex items-center justify-center gap-1.5 px-3.5 py-2 text-xs font-bold bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-700 rounded-xl shadow-sm hover:bg-slate-50 dark:hover:bg-slate-700 transition shrink-0"
+              >
+                <LogOut className="w-4 h-4" />
+                <span>ログアウト</span>
+              </button>
+            </div>
+          ) : (
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-100 dark:border-slate-800">
+              <div className="flex items-start gap-3.5">
+                <div className="w-10 h-10 rounded-xl bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 flex items-center justify-center shrink-0">
+                  <Database className="w-5 h-5" />
+                </div>
+                <div className="space-y-1">
+                  <div className="flex items-center gap-2">
+                    <span className="font-bold text-sm text-slate-800 dark:text-slate-100">Google アカウントでログイン</span>
+                    <span className="text-[10px] font-extrabold px-2 py-0.5 rounded-full bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300">未ログイン</span>
+                  </div>
+                  <p className="text-xs text-slate-400 leading-relaxed">
+                    Supabase Auth を使用して Google アカウントでサインインできます（家計簿データは引き続き端末の LocalStorage にも保存されます）。
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={signInWithGoogle}
+                className="flex items-center justify-center gap-2 px-4 py-2.5 text-xs font-bold bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-100 border border-slate-200 dark:border-slate-700 rounded-xl shadow-sm hover:bg-slate-50 dark:hover:bg-slate-800 transition shrink-0"
+              >
+                <LogIn className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
+                <span>Google でログイン</span>
+              </button>
+            </div>
+          )}
         </div>
       </Card>
 

@@ -5,7 +5,7 @@ import {
   DEFAULT_BUDGET,
   DEFAULT_CATEGORIES,
   DEFAULT_PLANNED_EXPENSES,
-  DEFAULT_SAVINGS_GOAL,
+  DEFAULT_SAVINGS_GOALS,
   DEFAULT_TRANSACTIONS,
   loadFromStorage,
   saveToStorage,
@@ -82,7 +82,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     loadFromStorage(STORAGE_KEYS.PLANNED_EXPENSES, DEFAULT_PLANNED_EXPENSES)
   );
   const [savingsGoals, setSavingsGoals] = useState<SavingsGoal[]>(() =>
-    loadFromStorage(STORAGE_KEYS.SAVINGS_GOALS, [DEFAULT_SAVINGS_GOAL])
+    loadFromStorage(STORAGE_KEYS.SAVINGS_GOALS, DEFAULT_SAVINGS_GOALS)
   );
 
   useEffect(() => { saveToStorage(STORAGE_KEYS.ACCOUNTS, accounts); }, [accounts]);
@@ -208,7 +208,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setCategories(DEFAULT_CATEGORIES);
     setBudget(DEFAULT_BUDGET);
     setPlannedExpenses(DEFAULT_PLANNED_EXPENSES);
-    setSavingsGoals([DEFAULT_SAVINGS_GOAL]);
+    setSavingsGoals(DEFAULT_SAVINGS_GOALS);
   };
 
   return (
