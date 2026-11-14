@@ -1,0 +1,287 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>LocalStorage Data Verification</title>
+  <style>
+    body { font-family: monospace; padding: 20px; max-width: 1200px; margin: 0 auto; }
+    pre { background: #f5f5f5; padding: 10px; overflow-x: auto; max-height: 500px; }
+    .section { margin-bottom: 30px; }
+    button { padding: 10px 20px; margin-right: 10px; cursor: pointer; }
+    .btn-primary { background: #16a34a; color: white; border: none; border-radius: 4px; }
+    .btn-secondary { background: #3b82f6; color: white; border: none; border-radius: 4px; }
+    table { border-collapse: collapse; width: 100%; font-size: 12px; }
+    th, td { border: 1px solid #ddd; padding: 4px 8px; text-align: right; }
+    th { background: #f0fdf4; text-align: left; }
+    .text-left { text-align: left; }
+    .negative { color: #ef4444; }
+    .positive { color: #22c55e; }
+  </style>
+</head>
+<body>
+  <h1>LocalStorage Data Verification</h1>
+  <div>
+    <button class="btn-primary" onclick="analyzeData()">Analyze LocalStorage Data</button>
+    <button class="btn-secondary" onclick="exportCSV()">Export CSV</button>
+    <button class="btn-secondary" onclick="downloadJSON()">Download Full JSON</button>
+  </div>
+  <div id="output"></div>
+
+  <script>
+    const STORAGE_KEYS = {
+      ACCOUNTS: 'kakeibo_accounts',
+      TRANSACTIONS: 'kakeibo_transactions',
+      CATEGORIES: 'kakeibo_categories',
+      BUDGETS: 'kakeibo_budgets',
+      PLANNED_EXPENSES: 'kakeibo_planned_expenses',
+      SAVINGS_GOALS: 'kakeibo_savings_goals',
+      SETTINGS: 'kakeibo_settings',
+    };
+
+    function getStorage(key) {
+      try {
+        const item = localStorage.getItem(key);
+        return item ? JSON.parse(item) : null;
+      } catch (e) {
+        return { error: e.message };
+      }
+    }
+
+    function formatNumber(n) {
+      return n.toLocaleString();
+    }
+
+    function analyzeData() {
+      const accounts = getStorage(STORAGE_KEYS.ACCOUNTS);
+      const transactions = getStorage(STORAGE_KEYS.TRANSACTIONS);
+      const categories = getStorage(STORAGE_KEYS.CATEGORIES);
+      const budgets = getStorage(STORAGE_KEYS.BUDGETS);
+      const plannedExpenses = getStorage(STORAGE_KEYS.PLANNED_EXPENSES);
+      const savingsGoals = getStorage(STORAGE_KEYS.SAVINGS_GOALS);
+      const settings = getStorage(STORAGE_KEYS.SETTINGS);
+
+      let html = '';
+
+      // Accounts
+      html += '<div class="section"><h2>Accounts (' + (accounts?.length || 0) + ')</h2>';
+      if (accounts) {
+        html += '<table><thead><tr><th class="text-left">ID</th><th class="text-left">Name</th><th class="text-left">Type</th><th>Opening Balance</th><th>Opening Date</th><th>Include in Assets</th><th>Active</th></tr></thead><tbody>';
+        accounts.forEach(a => {
+          html += `<tr><td class="text-left">${a.id}</td><td class="text-left">${a.name}</td><td class="text-left">${a.type}</td><td>${formatNumber(a.openingBalance)}</td><td>${a.openingBalanceDate}</td><td>${a.includeInAssets}</td><td>${a.isActive}</td></tr>`;
+        });
+        html += '</tbody></table>';
+      }
+      html += '</div>';
+
+      // Transactions
+      html += '<div class="section"><h2>Transactions (' + (transactions?.length || 0) + ')</h2>';
+      if (transactions) {
+        // Type breakdown
+        const typeCounts = {};
+        const categoryCounts = {};
+        const accountCounts = {};
+        let totalIncome = 0, totalExpense = 0, totalTransfer = 0, totalCardPayment = 0, totalAdjustment = 0;
+
+        transactions.forEach(tx => {
+          typeCounts[tx.type] = (typeCounts[tx.type] || 0) + 1;
+          categoryCounts[tx.categoryId || 'none'] = (categoryCounts[tx.categoryId || 'none'] || 0) + 1;
+          accountCounts[tx.accountId] = (accountCounts[tx.accountId] || 0) + 1;
+
+          const amt = Math.abs(tx.amount);
+          switch (tx.type) {
+            case 'income': totalIncome += amt; break;
+            case 'expense': totalExpense += amt; break;
+            case 'transfer_out': case 'transfer_in': case 'transfer': totalTransfer += amt; break;
+            case 'card_payment': totalCardPayment += amt; break;
+            case 'adjustment': totalAdjustment += amt; break;
+          }
+        });
+
+        html += '<h3>Type Breakdown</h3>';
+        html += '<table><thead><tr><th class="text-left">Type</th><th>Count</th></tr></thead><tbody>';
+        Object.entries(typeCounts).forEach(([type, count]) => {
+          html += `<tr><td class="text-left">${type}</td><td>${count}</td></tr>`;
+        });
+        html += '</tbody></table>';
+
+        html += '<h3>Amount Summary</h3>';
+        html += '<table><thead><tr><th class="text-left">Type</th><th>Total</th></tr></thead><tbody>';
+        html += `<tr><td class="text-left positive">Income</td><td class="positive">${formatNumber(totalIncome)}</td></tr>`;
+        html += `<tr><td class="text-left negative">Expense</td><td class="negative">${formatNumber(totalExpense)}</td></tr>`;
+        html += `<tr><td class="text-left">Transfer</td><td>${formatNumber(totalTransfer)}</td></tr>`;
+        html += `<tr><td class="text-left">Card Payment</td><td>${formatNumber(totalCardPayment)}</td></tr>`;
+        html += `<tr><td class="text-left">Adjustment</td><td>${formatNumber(totalAdjustment)}</td></tr>`;
+        html += '</tbody></table>';
+
+        // Account breakdown
+        html += '<h3>Account Breakdown</h3>';
+        html += '<table><thead><tr><th class="text-left">Account ID</th><th>Count</th></tr></thead><tbody>';
+        Object.entries(accountCounts).forEach(([accId, count]) => {
+          const acc = accounts?.find(a => a.id === accId);
+          html += `<tr><td class="text-left">${accId} (${acc?.name || 'unknown'})</td><td>${count}</td></tr>`;
+        });
+        html += '</tbody></table>';
+
+        // Date range
+        const dates = transactions.map(t => t.date).sort();
+        html += `<p>Date Range: ${dates[0]} to ${dates[dates.length - 1]}</p>`;
+
+        // Check for transfer pairs
+        html += '<h3>Transfer Pair Check</h3>';
+        const transferGroups = {};
+        transactions.filter(t => t.transferGroupId).forEach(t => {
+          transferGroups[t.transferGroupId] = transferGroups[t.transferGroupId] || [];
+          transferGroups[t.transferGroupId].push(t);
+        });
+        html += '<table><thead><tr><th class="text-left">Group ID</th><th>Count</th><th class="text-left">Status</th></tr></thead><tbody>';
+        Object.entries(transferGroups).forEach(([groupId, txs]) => {
+          const out = txs.filter(t => t.type === 'transfer_out');
+          const inTx = txs.filter(t => t.type === 'transfer_in');
+          const old = txs.filter(t => t.type === 'transfer');
+          let status = '';
+          if (out.length === 1 && inTx.length === 1 && out[0].amount === inTx[0].amount) {
+            status = '<span class="positive">✓ Balanced</span>';
+          } else if (old.length > 0) {
+            status = '<span class="negative">⚠ Old format</span>';
+          } else {
+            status = '<span class="negative">✗ Unbalanced</span>';
+          }
+          html += `<tr><td class="text-left">${groupId}</td><td>${txs.length}</td><td>${status}</td></tr>`;
+        });
+        html += '</tbody></table>';
+
+        // Check card payments
+        html += '<h3>Card Payment Check</h3>';
+        const cardPayments = transactions.filter(t => t.type === 'card_payment');
+        const cardGroups = {};
+        cardPayments.forEach(t => {
+          const key = t.date + '_' + t.amount;
+          cardGroups[key] = cardGroups[key] || [];
+          cardGroups[key].push(t);
+        });
+        html += '<table><thead><tr><th class="text-left">Date_Amount</th><th>Count</th><th class="text-left">Accounts</th><th class="text-left">Status</th></tr></thead><tbody>';
+        Object.entries(cardGroups).forEach(([key, txs]) => {
+          const accounts = txs.map(t => t.accountId).join(', ');
+          const types = txs.map(t => t.type).join(', ');
+          let status = '';
+          if (txs.length === 2) {
+            const hasBank = txs.some(t => accounts.find(a => a.id === t.accountId)?.type === 'bank');
+            const hasCC = txs.some(t => accounts.find(a => a.id === t.accountId)?.type === 'credit_card');
+            if (hasBank && hasCC) status = '<span class="positive">✓ Paired</span>';
+            else status = '<span class="negative">⚠ Missing pair</span>';
+          } else {
+            status = '<span class="negative">✗ Unpaired</span>';
+          }
+          html += `<tr><td class="text-left">${key}</td><td>${txs.length}</td><td class="text-left">${accounts}</td><td>${status}</td></tr>`;
+        });
+        html += '</tbody></table>';
+      }
+      html += '</div>';
+
+      // Categories
+      html += '<div class="section"><h2>Categories (' + (categories?.length || 0) + ')</h2>';
+      if (categories) {
+        html += '<table><thead><tr><th class="text-left">ID</th><th class="text-left">Name</th><th class="text-left">Kind</th><th class="text-left">Color</th><th>Order</th><th>Active</th></tr></thead><tbody>';
+        categories.forEach(c => {
+          html += `<tr><td class="text-left">${c.id}</td><td class="text-left">${c.name}</td><td class="text-left">${c.kind}</td><td class="text-left" style="color:${c.color}">● ${c.color}</td><td>${c.sortOrder}</td><td>${c.isActive}</td></tr>`;
+        });
+        html += '</tbody></table>';
+      }
+      html += '</div>';
+
+      // Budgets
+      html += '<div class="section"><h2>Budgets</h2>';
+      html += '<pre>' + JSON.stringify(budgets, null, 2) + '</pre>';
+      html += '</div>';
+
+      // Planned Expenses
+      html += '<div class="section"><h2>Planned Expenses (' + (plannedExpenses?.length || 0) + ')</h2>';
+      if (plannedExpenses) {
+        html += '<table><thead><tr><th class="text-left">ID</th><th class="text-left">Description</th><th>Amount</th><th>Due Date</th><th class="text-left">Category</th><th class="text-left">Account</th><th class="text-left">Kind</th><th>Repeat</th></tr></thead><tbody>';
+        plannedExpenses.forEach(p => {
+          html += `<tr><td class="text-left">${p.id}</td><td class="text-left">${p.description}</td><td>${formatNumber(p.amount)}</td><td>${p.dueDate}</td><td class="text-left">${p.categoryId}</td><td class="text-left">${p.accountId}</td><td class="text-left">${p.kind}</td><td>${p.repeatType}</td></tr>`;
+        });
+        html += '</tbody></table>';
+      }
+      html += '</div>';
+
+      // Savings Goals
+      html += '<div class="section"><h2>Savings Goals (' + (savingsGoals?.length || 0) + ')</h2>';
+      if (savingsGoals) {
+        html += '<table><thead><tr><th class="text-left">ID</th><th class="text-left">Title</th><th>Target</th><th>Current</th><th>Linked Account</th><th>Deadline</th><th>Auto Rate</th></tr></thead><tbody>';
+        savingsGoals.forEach(g => {
+          html += `<tr><td class="text-left">${g.id}</td><td class="text-left">${g.title}</td><td>${formatNumber(g.targetAmount)}</td><td>${formatNumber(g.currentAmount)}</td><td class="text-left">${g.linkedAccountId || 'none'}</td><td>${g.deadlineDate || 'none'}</td><td>${g.autoSavingRate || 0}%</td></tr>`;
+        });
+        html += '</tbody></table>';
+      }
+      html += '</div>';
+
+      // Settings
+      html += '<div class="section"><h2>Settings</h2>';
+      html += '<pre>' + JSON.stringify(settings, null, 2) + '</pre>';
+      html += '</div>';
+
+      document.getElementById('output').innerHTML = html;
+    }
+
+    function exportCSV() {
+      const accounts = getStorage(STORAGE_KEYS.ACCOUNTS);
+      const transactions = getStorage(STORAGE_KEYS.TRANSACTIONS);
+      const categories = getStorage(STORAGE_KEYS.CATEGORIES);
+
+      if (!transactions) return;
+
+      const accountMap = new Map(accounts?.map(a => [a.id, a.name]) || []);
+      const categoryMap = new Map(categories?.map(c => [c.id, c.name]) || []);
+
+      const header = ['date', 'type', 'amount', 'account_name', 'category_name', 'description', 'id', 'transferGroupId', 'linkedCardId'];
+      const lines = [header.join(',')];
+
+      transactions.forEach(tx => {
+        const accName = accountMap.get(tx.accountId) || '';
+        const catName = tx.categoryId ? categoryMap.get(tx.categoryId) || '' : '';
+        const line = [
+          `"${tx.date}"`,
+          `"${tx.type}"`,
+          tx.amount,
+          `"${accName.replace(/"/g, '""')}"`,
+          `"${catName.replace(/"/g, '""')}"`,
+          `"${tx.description.replace(/"/g, '""')}"`,
+          `"${tx.id}"`,
+          `"${tx.transferGroupId || ''}"`,
+          `"${tx.linkedCardId || ''}"`,
+        ];
+        lines.push(line.join(','));
+      });
+
+      const csvContent = lines.join('\n');
+      const blob = new Blob([new Uint8Array([0xef, 0xbb, 0xbf]), csvContent], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `kakeibo_transactions_${new Date().toISOString().split('T')[0]}.csv`;
+      a.click();
+      URL.revokeObjectURL(url);
+    }
+
+    function downloadJSON() {
+      const data = {
+        accounts: getStorage(STORAGE_KEYS.ACCOUNTS),
+        transactions: getStorage(STORAGE_KEYS.TRANSACTIONS),
+        categories: getStorage(STORAGE_KEYS.CATEGORIES),
+        budgets: getStorage(STORAGE_KEYS.BUDGETS),
+        plannedExpenses: getStorage(STORAGE_KEYS.PLANNED_EXPENSES),
+        savingsGoals: getStorage(STORAGE_KEYS.SAVINGS_GOALS),
+        settings: getStorage(STORAGE_KEYS.SETTINGS),
+      };
+      const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `kakeibo_backup_${new Date().toISOString().split('T')[0]}.json`;
+      a.click();
+      URL.revokeObjectURL(url);
+    }
+  </script>
+</body>
+</html>

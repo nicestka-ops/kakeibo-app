@@ -4,6 +4,7 @@ import path from 'path';
 
 export default defineConfig({
   plugins: [react()],
+  base: '/kakeibo-app/',
   resolve: {
     alias: {
       '@': path.resolve(__dirname, './src'),
@@ -12,5 +13,11 @@ export default defineConfig({
   server: {
     port: 3000,
     host: true,
+  },
+  test: {
+    globals: true,
+    environment: 'jsdom',
+    setupFiles: ['./src/test/setup.ts'],
+    include: ['src/**/*.test.ts', 'src/**/*.test.tsx'],
   },
 });

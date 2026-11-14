@@ -12,3 +12,9 @@ data_audit/
 !.vscode/extensions.json
 .idea
 .DS_Store
+
+# ZIP backups
+*.zip
+
+# Local verification export
+localStorage-data.json

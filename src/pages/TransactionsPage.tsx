@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { useApp } from '@/contexts/AppContext';
 import { Transaction } from '@/types';
 import { Card } from '@/components/common/Card';
-import { Search, Trash2, ArrowUpRight, ArrowDownRight, ArrowLeftRight, CreditCard } from 'lucide-react';
+import { Search, Trash2, ArrowUpRight, ArrowDownRight, ArrowLeftRight, CreditCard, Filter } from 'lucide-react';
 
 /** 取引種別の表示設定 */
 const TX_TYPE_CONFIG: Record<
@@ -65,6 +65,7 @@ export const TransactionsPage: React.FC = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [filterType, setFilterType] = useState<string>('all');
   const [filterCategory, setFilterCategory] = useState<string>('all');
+  const [showFilters, setShowFilters] = useState(false);
 
   const categoryMap = new Map(categories.map((c) => [c.id, c]));
   const accountMap = new Map(accounts.map((a) => [a.id, a]));
@@ -97,10 +98,13 @@ export const TransactionsPage: React.FC = () => {
     }
   };
 
+  const hasActiveFilters = filterType !== 'all' || filterCategory !== 'all';
+
   return (
-    <div className="space-y-6 animate-fadeIn">
-      <Card>
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+    <div className="space-y-5 animate-fadeIn px-1 sm:px-0">
+      {/* Search and Filters */}
+      <Card className="p-4 sm:p-5">
+        <div className="space-y-3 sm:space-y-0 sm:grid sm:grid-cols-[1fr_auto_auto] sm:items-end sm:gap-3">
           <div className="relative">
             <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
             <input
@@ -108,42 +112,73 @@ export const TransactionsPage: React.FC = () => {
               placeholder="摘要、カテゴリ、口座で検索..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full pl-9 pr-3 py-2 text-sm bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500 text-slate-900 dark:text-slate-100"
+              className="w-full pl-9 pr-3 py-2.5 text-sm bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500 text-slate-900 dark:text-slate-100"
             />
           </div>
 
-          <select
-            value={filterType}
-            onChange={(e) => setFilterType(e.target.value)}
-            className="px-3 py-2 text-sm bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500 text-slate-900 dark:text-slate-100"
-          >
-            <option value="all">すべての種別</option>
-            <option value="expense">支出のみ</option>
-            <option value="income">収入のみ</option>
-            <option value="transfer">口座振替のみ</option>
-            <option value="card_payment">カード引落のみ</option>
-          </select>
-
-          <select
-            value={filterCategory}
-            onChange={(e) => setFilterCategory(e.target.value)}
-            className="px-3 py-2 text-sm bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500 text-slate-900 dark:text-slate-100"
-          >
-            <option value="all">すべてのカテゴリー</option>
-            {categories.map((c) => (
-              <option key={c.id} value={c.id}>
-                {c.name}
-              </option>
-            ))}
-          </select>
+          <div className="flex flex-wrap gap-2">
+            <button
+              onClick={() => setShowFilters(!showFilters)}
+              className={`flex items-center gap-1.5 px-3 py-2 text-sm font-medium rounded-xl transition ${
+                hasActiveFilters || showFilters
+                  ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800'
+                  : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700'
+              }`}
+            >
+              <Filter className="w-4 h-4" />
+              <span className="hidden sm:inline">絞り込み</span>
+            </button>
+          </div>
         </div>
+
+        {showFilters && (
+          <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-3 pt-4 border-t border-slate-100 dark:border-slate-800 animate-fadeIn">
+            <select
+              value={filterType}
+              onChange={(e) => setFilterType(e.target.value)}
+              className="px-3 py-2.5 text-sm bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500 text-slate-900 dark:text-slate-100"
+            >
+              <option value="all">すべての種別</option>
+              <option value="expense">支出のみ</option>
+              <option value="income">収入のみ</option>
+              <option value="transfer">口座振替のみ</option>
+              <option value="card_payment">カード引落のみ</option>
+            </select>
+
+            <select
+              value={filterCategory}
+              onChange={(e) => setFilterCategory(e.target.value)}
+              className="px-3 py-2.5 text-sm bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500 text-slate-900 dark:text-slate-100"
+            >
+              <option value="all">すべてのカテゴリー</option>
+              {categories.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.name}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
       </Card>
 
       <div className="flex justify-between items-center px-1 text-sm text-slate-500 dark:text-slate-400">
         <span>該当件数: {filtered.length} 件</span>
+        {hasActiveFilters && (
+          <button
+            onClick={() => {
+              setFilterType('all');
+              setFilterCategory('all');
+              setShowFilters(false);
+            }}
+            className="text-xs font-bold text-emerald-600 dark:text-emerald-400 hover:underline flex items-center gap-1"
+          >
+            <Filter className="w-3.5 h-3.5" />
+            絞り込み解除
+          </button>
+        )}
       </div>
 
-      <Card>
+      <Card className="overflow-hidden">
         {filtered.length === 0 ? (
           <div className="py-12 text-center text-slate-400 text-sm">
             条件に一致する取引データは見つかりませんでした
@@ -168,30 +203,30 @@ export const TransactionsPage: React.FC = () => {
               return (
                 <div
                   key={tx.id}
-                  className="py-3.5 flex items-center justify-between group hover:bg-slate-50/50 dark:hover:bg-slate-800/40 rounded-xl px-2 transition"
+                  className="py-3.5 flex items-center justify-between group hover:bg-slate-50/50 dark:hover:bg-slate-800/40 rounded-xl px-2 sm:px-4 transition"
                 >
-                  <div className="flex items-center gap-3.5">
+                  <div className="flex items-center gap-3.5 min-w-0">
                     <div
                       className="w-10 h-10 rounded-2xl flex items-center justify-center text-white shrink-0"
                       style={{ backgroundColor: cat?.color || cfg.bgColor }}
                     >
                       {cfg.icon}
                     </div>
-                    <div>
+                    <div className="min-w-0">
                       <div className="flex items-center gap-2 flex-wrap">
-                        <span className="font-bold text-sm text-slate-800 dark:text-slate-100">
+                        <span className="font-bold text-sm text-slate-800 dark:text-slate-100 truncate">
                           {tx.description}
                         </span>
                         {cat && (
-                          <span className="text-[11px] px-2 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300">
+                          <span className="text-[11px] px-2 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 shrink-0">
                             {cat.name}
                           </span>
                         )}
-                        <span className="text-[11px] px-2 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400">
+                        <span className="text-[11px] px-2 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 shrink-0">
                           {cfg.label}
                         </span>
                       </div>
-                      <p className="text-xs text-slate-400 mt-0.5">
+                      <p className="text-xs text-slate-400 mt-0.5 truncate">
                         {tx.date} • {acc?.name || '口座未設定'}
                         {pairAcc && (
                           <span> → {pairAcc.name}</span>
@@ -200,7 +235,7 @@ export const TransactionsPage: React.FC = () => {
                     </div>
                   </div>
 
-                  <div className="flex items-center gap-3">
+                  <div className="flex items-center gap-3 shrink-0">
                     <span className={`font-extrabold text-base ${cfg.colorClass}`}>
                       {cfg.prefix}¥{tx.amount.toLocaleString()}
                     </span>

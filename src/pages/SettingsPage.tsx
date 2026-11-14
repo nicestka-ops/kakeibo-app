@@ -1,14 +1,15 @@
-import React, { useRef } from 'react';
+import React, { useRef, useState } from 'react';
 import { useApp } from '@/contexts/AppContext';
 import { useTheme } from '@/contexts/ThemeContext';
 import { Card } from '@/components/common/Card';
 import { exportTransactionsCSV, importTransactionsCSV } from '@/services/migration/csvImporter';
-import { Moon, Sun, Monitor, Download, Upload, RefreshCw, ShieldCheck, Database } from 'lucide-react';
+import { Moon, Sun, Monitor, Download, Upload, RefreshCw, ShieldCheck, Database, Palette, Bell, Key, Trash2 } from 'lucide-react';
 
 export const SettingsPage: React.FC = () => {
   const { transactions, accounts, categories, resetToDefaultData, addTransaction } = useApp();
   const { theme, setTheme } = useTheme();
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [showDangerZone, setShowDangerZone] = useState(false);
 
   const accountMap = new Map(accounts.map((a) => [a.id, a.name]));
   const categoryMap = new Map(categories.map((c) => [c.id, c.name]));
@@ -53,8 +54,25 @@ export const SettingsPage: React.FC = () => {
     reader.readAsText(file, 'utf-8');
   };
 
+  const handleReset = () => {
+    if (confirm('現在のデータをリセットして初期サンプルに戻しますか？\nこの操作は元に戻せません。')) {
+      resetToDefaultData();
+      alert('初期サンプルデータにリセットしました。');
+    }
+  };
+
+  const handleClearAll = () => {
+    if (confirm('すべてのデータを完全に削除しますか？\nこの操作は元に戻せません。')) {
+      if (confirm('本当に削除しますか？バックアップを取ってから実行してください。')) {
+        localStorage.clear();
+        location.reload();
+      }
+    }
+  };
+
   return (
-    <div className="space-y-6 animate-fadeIn max-w-4xl">
+    <div className="space-y-5 animate-fadeIn max-w-4xl px-1 sm:px-0">
+      {/* Appearance Settings */}
       <Card title="外観設定">
         <p className="text-xs text-slate-400 mb-4">画面のカラーテーマを選択できます</p>
         <div className="grid grid-cols-3 gap-3">
@@ -96,6 +114,7 @@ export const SettingsPage: React.FC = () => {
         </div>
       </Card>
 
+      {/* Data Management */}
       <Card title="データ管理">
         <p className="text-xs text-slate-400 mb-4">
           取引履歴のバックアップやCSV移行が行えます。データは端末内のLocalStorageに安全に保存されています。
@@ -150,12 +169,7 @@ export const SettingsPage: React.FC = () => {
               </div>
             </div>
             <button
-              onClick={() => {
-                if (confirm('現在のデータをリセットして初期サンプルに戻しますか？')) {
-                  resetToDefaultData();
-                  alert('初期サンプルデータにリセットしました。');
-                }
-              }}
+              onClick={handleReset}
               className="px-3.5 py-2 text-xs font-bold bg-white dark:bg-slate-700 text-amber-600 dark:text-amber-400 border border-slate-200 dark:border-slate-600 rounded-xl shadow-sm hover:bg-slate-50 transition"
             >
               リセット
@@ -164,6 +178,7 @@ export const SettingsPage: React.FC = () => {
         </div>
       </Card>
 
+      {/* Cloud Sync */}
       <Card title="クラウド同期（Supabase）">
         <div className="flex items-start gap-3.5">
           <div className="w-10 h-10 rounded-xl bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 flex items-center justify-center shrink-0">
@@ -179,6 +194,83 @@ export const SettingsPage: React.FC = () => {
             </p>
           </div>
         </div>
+      </Card>
+
+      {/* Advanced Settings */}
+      <Card title="詳細設定">
+        <div className="space-y-3">
+          <div className="flex items-center justify-between p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-100 dark:border-slate-800">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-purple-500/10 text-purple-600 dark:text-purple-400 flex items-center justify-center">
+                <Palette className="w-5 h-5" />
+              </div>
+              <div>
+                <h4 className="font-bold text-sm text-slate-800 dark:text-slate-100">カスタムテーマカラー</h4>
+                <p className="text-xs text-slate-400">アクセントカラーを変更（準備中）</p>
+              </div>
+            </div>
+            <span className="text-xs text-slate-400">近日対応</span>
+          </div>
+
+          <div className="flex items-center justify-between p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-100 dark:border-slate-800">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-amber-500/10 text-amber-600 dark:text-amber-400 flex items-center justify-center">
+                <Bell className="w-5 h-5" />
+              </div>
+              <div>
+                <h4 className="font-bold text-sm text-slate-800 dark:text-slate-100">通知設定</h4>
+                <p className="text-xs text-slate-400">支出予定のリマインド等（準備中）</p>
+              </div>
+            </div>
+            <span className="text-xs text-slate-400">近日対応</span>
+          </div>
+
+          <div className="flex items-center justify-between p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-100 dark:border-slate-800">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 flex items-center justify-center">
+                <Key className="w-5 h-5" />
+              </div>
+              <div>
+                <h4 className="font-bold text-sm text-slate-800 dark:text-slate-100">パスワードロック</h4>
+                <p className="text-xs text-slate-400">アプリ起動時の認証（準備中）</p>
+              </div>
+            </div>
+            <span className="text-xs text-slate-400">近日対応</span>
+          </div>
+        </div>
+      </Card>
+
+      {/* Danger Zone */}
+      <Card title="危険な操作">
+        <button
+          onClick={() => setShowDangerZone(!showDangerZone)}
+          className="w-full flex items-center justify-between p-3.5 rounded-2xl bg-rose-50 dark:bg-rose-950/30 border border-rose-100 dark:border-rose-900/50 text-left"
+        >
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-rose-500/10 text-rose-600 dark:text-rose-400 flex items-center justify-center">
+              <Trash2 className="w-5 h-5" />
+            </div>
+            <div>
+              <h4 className="font-bold text-sm text-rose-700 dark:text-rose-300">すべてのデータを削除</h4>
+              <p className="text-xs text-rose-500 dark:text-rose-400">LocalStorageを完全にクリアします</p>
+            </div>
+          </div>
+          <span className="text-xs font-bold text-rose-500 dark:text-rose-400">注意</span>
+        </button>
+
+        {showDangerZone && (
+          <div className="mt-3 p-4 rounded-xl bg-rose-50 dark:bg-rose-950/30 border border-rose-200 dark:border-rose-800 animate-fadeIn">
+            <p className="text-xs text-rose-600 dark:text-rose-400 mb-3">
+              この操作は元に戻せません。必ずCSVエクスポートでバックアップを取ってから実行してください。
+            </p>
+            <button
+              onClick={handleClearAll}
+              className="w-full py-2.5 text-sm font-bold text-white bg-rose-600 hover:bg-rose-700 rounded-xl shadow-md transition"
+            >
+              完全に削除する
+            </button>
+          </div>
+        )}
       </Card>
 
       <Card>

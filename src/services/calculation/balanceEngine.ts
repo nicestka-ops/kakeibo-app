@@ -10,6 +10,13 @@ export interface FinancialSummary {
   netAssets: number;
 }
 
+export interface AssetTrendPoint {
+  month: string;
+  totalAssets: number;
+  totalLiabilities: number;
+  netAssets: number;
+}
+
 export interface MonthlyCashFlow {
   income: number;
   expense: number;
@@ -201,6 +208,45 @@ export function generateMonthlyTrend(
       income: flow.income,
       expense: flow.expense,
       balance: flow.netSavings,
+    });
+  }
+
+  return result;
+}
+
+/**
+ * 過去N ヶ月分の本当の資産推移を返す。
+ * 各月末時点での口座残高を再計算し、総資産・総負債・純資産を算出する。
+ * - asOfDate として各月末日を指定して calculateAccountBalances を呼ぶ
+ * - openingBalanceDate を正しく考慮（口座開設前は残高0）
+ * - includeInAssets=false の口座を除外
+ * - クレジットカードの負債を正しく計上
+ * - 未来の取引を反映しない
+ */
+export function generateAssetTrend(
+  accounts: Account[],
+  transactions: Transaction[],
+  monthsCount: number = 6
+): AssetTrendPoint[] {
+  const result: AssetTrendPoint[] = [];
+  const now = new Date();
+
+  for (let i = monthsCount - 1; i >= 0; i--) {
+    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+    // 月末日を計算（翌月の1日の前日）
+    const endOfMonth = new Date(d.getFullYear(), d.getMonth() + 1, 0);
+    const asOfDate = `${endOfMonth.getFullYear()}-${String(endOfMonth.getMonth() + 1).padStart(2, '0')}-${String(endOfMonth.getDate()).padStart(2, '0')}`;
+    const ym = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+
+    // 該当月末時点での残高を計算
+    const balances = calculateAccountBalances(accounts, transactions, asOfDate);
+    const summary = calculateFinancialSummary(accounts, balances);
+
+    result.push({
+      month: ym,
+      totalAssets: summary.totalAssets,
+      totalLiabilities: summary.totalLiabilities,
+      netAssets: summary.netAssets,
     });
   }
 
