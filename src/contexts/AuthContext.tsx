@@ -1,10 +1,12 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { Session, SupabaseClient, User } from '@supabase/supabase-js';
 import {
+  allowedEmails,
   clearStoredSupabaseConfig,
   createSupabaseClientFromConfig,
   getEffectiveSupabaseConfig,
   hasEnvSupabaseConfig,
+  isEmailAllowed,
   saveStoredSupabaseConfig,
 } from '@/lib/supabase';
 
@@ -14,6 +16,7 @@ interface AuthContextType {
   loading: boolean;
   isConfigured: boolean;
   isEnvConfigured: boolean;
+  isEmailRestricted: boolean;
   configuredUrl: string | null;
   authError: string | null;
   signInWithGoogle: () => Promise<void>;
@@ -56,16 +59,33 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     let isMounted = true;
     setLoading(true);
 
+    const applySession = async (nextSession: Session | null) => {
+      const nextUser = nextSession?.user ?? null;
+      if (nextUser && !isEmailAllowed(nextUser.email)) {
+        await client.auth.signOut();
+        if (!isMounted) return;
+        setSession(null);
+        setUser(null);
+        setAuthError(
+          `このアカウント（${nextUser.email || '不明'}）にはアクセス権限がありません。`
+        );
+        return;
+      }
+      if (!isMounted) return;
+      setSession(nextSession);
+      setUser(nextUser);
+    };
+
     client.auth
       .getSession()
-      .then(({ data, error }) => {
+      .then(async ({ data, error }) => {
         if (!isMounted) return;
         if (error) {
           setAuthError(error.message);
         } else {
-          setSession(data.session);
-          setUser(data.session?.user ?? null);
+          await applySession(data.session);
         }
+        if (!isMounted) return;
         setLoading(false);
 
         const params = new URLSearchParams(window.location.search);
@@ -85,10 +105,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const {
       data: { subscription },
     } = client.auth.onAuthStateChange((_event, nextSession) => {
-      if (!isMounted) return;
-      setSession(nextSession);
-      setUser(nextSession?.user ?? null);
-      setLoading(false);
+      void applySession(nextSession).finally(() => {
+        if (isMounted) setLoading(false);
+      });
     });
 
     return () => {
@@ -158,6 +177,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         loading,
         isConfigured: Boolean(client),
         isEnvConfigured: hasEnvSupabaseConfig,
+        isEmailRestricted: allowedEmails.length > 0,
         configuredUrl,
         authError,
         signInWithGoogle,

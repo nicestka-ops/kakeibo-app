@@ -54,3 +54,22 @@ export function saveStoredSupabaseConfig(url: string, anonKey: string): StoredSu
 export function clearStoredSupabaseConfig(): void {
   localStorage.removeItem(SUPABASE_CONFIG_STORAGE_KEY);
 }
+
+const rawAllowedEmails = import.meta.env.VITE_ALLOWED_EMAILS?.trim() || '';
+
+export const allowedEmails: string[] = rawAllowedEmails
+  ? rawAllowedEmails
+      .split(',')
+      .map((email: string) => email.trim().toLowerCase())
+      .filter(Boolean)
+  : [];
+
+export function isEmailAllowed(email?: string | null): boolean {
+  if (allowedEmails.length === 0) {
+    return true;
+  }
+  if (!email) {
+    return false;
+  }
+  return allowedEmails.includes(email.trim().toLowerCase());
+}

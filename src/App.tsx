@@ -3,6 +3,7 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AppProvider } from '@/contexts/AppContext';
 import { AuthProvider } from '@/contexts/AuthContext';
 import { ThemeProvider } from '@/contexts/ThemeContext';
+import { AuthGate } from '@/components/auth/AuthGate';
 import { AppLayout } from '@/components/layout/AppLayout';
 
 import { HomePage } from '@/pages/HomePage';
@@ -18,23 +19,25 @@ export const App: React.FC = () => {
   return (
     <ThemeProvider>
       <AuthProvider>
-        <AppProvider>
-          <BrowserRouter basename={import.meta.env.BASE_URL}>
-            <Routes>
-              <Route path="/" element={<AppLayout />}>
-                <Route index element={<HomePage />} />
-                <Route path="transactions" element={<TransactionsPage />} />
-                <Route path="analytics" element={<AnalyticsPage />} />
-                <Route path="accounts" element={<AccountsPage />} />
-                <Route path="calendar" element={<CalendarPage />} />
-                <Route path="budgets" element={<BudgetsPage />} />
-                <Route path="goals" element={<GoalsPage />} />
-                <Route path="settings" element={<SettingsPage />} />
-                <Route path="*" element={<Navigate to="/" replace />} />
-              </Route>
-            </Routes>
-          </BrowserRouter>
-        </AppProvider>
+        <AuthGate>
+          <AppProvider>
+            <BrowserRouter basename={import.meta.env.BASE_URL}>
+              <Routes>
+                <Route path="/" element={<AppLayout />}>
+                  <Route index element={<HomePage />} />
+                  <Route path="transactions" element={<TransactionsPage />} />
+                  <Route path="analytics" element={<AnalyticsPage />} />
+                  <Route path="accounts" element={<AccountsPage />} />
+                  <Route path="calendar" element={<CalendarPage />} />
+                  <Route path="budgets" element={<BudgetsPage />} />
+                  <Route path="goals" element={<GoalsPage />} />
+                  <Route path="settings" element={<SettingsPage />} />
+                  <Route path="*" element={<Navigate to="/" replace />} />
+                </Route>
+              </Routes>
+            </BrowserRouter>
+          </AppProvider>
+        </AuthGate>
       </AuthProvider>
     </ThemeProvider>
   );
