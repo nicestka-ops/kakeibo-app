@@ -30,7 +30,8 @@ export interface MonthlyCashFlow {
  * - asOfDate を指定すると、その日付以前の取引のみ対象
  * - transfer は transfer_out（引き落とし）/ transfer_in（入金）の2エントリ方式
  */
-export const CASHFLOW_EXCLUDED_CATEGORY_NAMES = new Set(['両替', '調整', '経費']);
+export const CASHFLOW_EXCLUDED_CATEGORY_NAMES = new Set(['調整', '経費']);
+export const EXCHANGE_CATEGORY_NAME = '両替';
 
 export function isExcludedFromCashFlow(
   tx: Transaction,
@@ -39,6 +40,14 @@ export function isExcludedFromCashFlow(
   if (!tx.categoryId || !categoryNameMap) return false;
   const catName = categoryNameMap.get(tx.categoryId)?.trim();
   return Boolean(catName && CASHFLOW_EXCLUDED_CATEGORY_NAMES.has(catName));
+}
+
+export function isExchangeCategory(
+  tx: Transaction,
+  categoryNameMap?: Map<string, string>
+): boolean {
+  if (!tx.categoryId || !categoryNameMap) return false;
+  return categoryNameMap.get(tx.categoryId)?.trim() === EXCHANGE_CATEGORY_NAME;
 }
 
 export function calculateAccountBalances(
@@ -186,6 +195,15 @@ export function calculateMonthlyCashFlow(
     if (isExcludedFromCashFlow(tx, categoryNameMap)) continue;
     const amount = Math.round(Math.abs(tx.amount));
 
+    if (isExchangeCategory(tx, categoryNameMap)) {
+      if (tx.type === 'expense') {
+        expense += amount;
+      } else if (tx.type === 'income') {
+        expense -= amount;
+      }
+      continue;
+    }
+
     if (tx.type === 'income') {
       income += amount;
     } else if (tx.type === 'expense') {
@@ -211,11 +229,24 @@ export function calculateCategoryBreakdown(
   const breakdown: Record<string, number> = {};
 
   for (const tx of transactions) {
-    if (!tx.date.startsWith(yearMonth) || tx.type !== 'expense') continue;
+    if (!tx.date.startsWith(yearMonth)) continue;
     if (isExcludedFromCashFlow(tx, categoryNameMap)) continue;
+    const isExchange = isExchangeCategory(tx, categoryNameMap);
+    if (tx.type !== 'expense' && !(isExchange && tx.type === 'income')) continue;
+
     const catId = tx.categoryId || 'uncategorized';
     const amount = Math.round(Math.abs(tx.amount));
-    breakdown[catId] = (breakdown[catId] || 0) + amount;
+    if (isExchange && tx.type === 'income') {
+      breakdown[catId] = (breakdown[catId] || 0) - amount;
+    } else {
+      breakdown[catId] = (breakdown[catId] || 0) + amount;
+    }
+  }
+
+  for (const catId of Object.keys(breakdown)) {
+    if (breakdown[catId] <= 0) {
+      delete breakdown[catId];
+    }
   }
 
   return breakdown;

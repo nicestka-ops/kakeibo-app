@@ -66,13 +66,11 @@ export function getPaymentDateForClosing(
   return formatYearMonthDay(payYear, payMonth, paymentDay);
 }
 
-const CARD_EXCLUDED_CATEGORY_NAMES = new Set(['両替', '調整']);
-
 export function calculateCardBillingSummary(
   cardAccount: Account,
   transactions: Transaction[],
   asOfDate: string = getTodayDateString(),
-  categoryNameMap?: Map<string, string>
+  _categoryNameMap?: Map<string, string>
 ): CardBillingSummary {
   const closingDay = cardAccount.closingDay ?? 31;
   const paymentDay = cardAccount.paymentDay ?? 28;
@@ -91,13 +89,13 @@ export function calculateCardBillingSummary(
 
     const amount = Math.round(Math.abs(tx.amount));
     if (tx.type === 'expense') {
-      const catName = tx.categoryId && categoryNameMap ? categoryNameMap.get(tx.categoryId)?.trim() : undefined;
-      if (catName && CARD_EXCLUDED_CATEGORY_NAMES.has(catName)) {
-        continue;
-      }
       const { year, month } = getClosingPeriodForDate(tx.date, closingDay);
       const closingYm = `${year}-${String(month).padStart(2, '0')}`;
       cycleAmounts.set(closingYm, (cycleAmounts.get(closingYm) || 0) + amount);
+    } else if (tx.type === 'income' || tx.type === 'adjustment') {
+      const { year, month } = getClosingPeriodForDate(tx.date, closingDay);
+      const closingYm = `${year}-${String(month).padStart(2, '0')}`;
+      cycleAmounts.set(closingYm, (cycleAmounts.get(closingYm) || 0) - amount);
     } else if (tx.type === 'card_payment') {
       manualPaymentTotal += amount;
     }
@@ -107,7 +105,10 @@ export function calculateCardBillingSummary(
   let unpaidTotal = 0;
   const unpaidCycles: CardBillingCycle[] = [];
 
-  for (const [closingYm, amount] of cycleAmounts.entries()) {
+  for (const [closingYm, rawAmount] of cycleAmounts.entries()) {
+    const amount = Math.max(0, rawAmount);
+    if (amount === 0) continue;
+
     const [yStr, mStr] = closingYm.split('-');
     const debitDate = getPaymentDateForClosing(
       parseInt(yStr, 10),

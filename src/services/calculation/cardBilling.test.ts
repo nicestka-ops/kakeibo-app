@@ -95,7 +95,7 @@ describe('cardBilling', () => {
     expect(summary.nextDebitDate).toBe('2026-12-10');
   });
 
-  it('両替・調整・経費は月間収支・カテゴリ支出に含めず、経費のみクレジットカード支払いには含める', () => {
+  it('調整・経費は月間収支・カテゴリ支出に含めず、両替は支出に加減算し、両替・調整・経費すべてクレジットカード支払いと口座残高に反映する', () => {
     const categoryNameMap = new Map<string, string>([
       ['cat-food', '食費'],
       ['cat-exchange', '両替'],
@@ -127,55 +127,145 @@ describe('cardBilling', () => {
         updatedAt: '2026-11-06T10:00:00Z',
       },
       {
-        id: 'tx-exchange',
+        id: 'tx-exchange-out',
         date: '2026-11-07',
         type: 'expense',
         amount: 5000,
         accountId: 'acc-bank',
         categoryId: 'cat-exchange',
-        description: '両替',
+        description: '両替（出）',
         createdAt: '2026-11-07T10:00:00Z',
         updatedAt: '2026-11-07T10:00:00Z',
       },
       {
-        id: 'tx-adjust',
+        id: 'tx-exchange-in',
+        date: '2026-11-07',
+        type: 'income',
+        amount: 6000,
+        accountId: 'acc-bank',
+        categoryId: 'cat-exchange',
+        description: '両替（立替回収）',
+        createdAt: '2026-11-07T11:00:00Z',
+        updatedAt: '2026-11-07T11:00:00Z',
+      },
+      {
+        id: 'tx-card-exchange',
         date: '2026-11-08',
+        type: 'expense',
+        amount: 4000,
+        accountId: 'acc-card',
+        categoryId: 'cat-exchange',
+        description: 'カードで両替',
+        createdAt: '2026-11-08T10:00:00Z',
+        updatedAt: '2026-11-08T10:00:00Z',
+      },
+      {
+        id: 'tx-card-adjust',
+        date: '2026-11-09',
+        type: 'expense',
+        amount: 1000,
+        accountId: 'acc-card',
+        categoryId: 'cat-adjust',
+        description: 'カード残高調整（出）',
+        createdAt: '2026-11-09T10:00:00Z',
+        updatedAt: '2026-11-09T10:00:00Z',
+      },
+      {
+        id: 'tx-adjust',
+        date: '2026-11-10',
         type: 'income',
         amount: 2000,
         accountId: 'acc-bank',
         categoryId: 'cat-adjust',
         description: '残高調整',
-        createdAt: '2026-11-08T10:00:00Z',
-        updatedAt: '2026-11-08T10:00:00Z',
+        createdAt: '2026-11-10T10:00:00Z',
+        updatedAt: '2026-11-10T10:00:00Z',
       },
     ];
 
+    // 支出: 食費(3000) + 両替出(5000 + 4000) - 両替入(6000) = 6000
+    // 調整・経費は除外、両替入は収入には含めない
     const flow = calculateMonthlyCashFlow(mixedTransactions, '2026-11', categoryNameMap);
     expect(flow.income).toBe(0);
-    expect(flow.expense).toBe(3000); // 両替・調整・経費は除外され、食費のみ
+    expect(flow.expense).toBe(6000);
 
+    // カテゴリ別支出: 食費(3000), 両替(5000 + 4000 - 6000 = 3000), 経費・調整は除外
     const breakdown = calculateCategoryBreakdown(mixedTransactions, '2026-11', categoryNameMap);
     expect(breakdown['cat-food']).toBe(3000);
+    expect(breakdown['cat-exchange']).toBe(3000);
     expect(breakdown['cat-expense']).toBeUndefined();
-    expect(breakdown['cat-exchange']).toBeUndefined();
+    expect(breakdown['cat-adjust']).toBeUndefined();
 
-    // クレジットカードの未払いには「経費(8000)」が含まれる（3000 + 8000 = 11000）
+    // クレジットカードの未払いには食費(3000) + 経費(8000) + 両替(4000) + 調整(1000) = 16000 が含まれる
     const cardSummary = calculateCardBillingSummary(
       cardAccount,
       mixedTransactions,
       '2026-11-15',
       categoryNameMap
     );
-    expect(cardSummary.unpaidTotal).toBe(11000);
+    expect(cardSummary.unpaidTotal).toBe(16000);
 
-    // 口座残高には両替(-5000)・調整(+2000)・経費(-8000)のすべてが増減反映される
+    // 口座残高には両替・調整・経費のすべてが増減反映される
     const balances = calculateAccountBalances(
       [bankAccount, cardAccount],
       mixedTransactions,
       '2026-11-15',
       categoryNameMap
     );
-    expect(balances['acc-bank']).toBe(97000); // 100000 - 5000(両替) + 2000(調整)
-    expect(balances['acc-card']).toBe(-11000); // -3000(食費) - 8000(経費)
+    expect(balances['acc-bank']).toBe(103000); // 100000 - 5000(両替出) + 6000(両替入) + 2000(調整)
+    expect(balances['acc-card']).toBe(-16000); // -3000(食費) - 8000(経費) - 4000(両替) - 1000(調整)
+
+    // 引き落とし日（12/28）到来後は銀行口座から16000円引き落とされ、カード負債が0になる
+    const balancesAfterDebit = calculateAccountBalances(
+      [bankAccount, cardAccount],
+      mixedTransactions,
+      '2026-12-28',
+      categoryNameMap
+    );
+    expect(balancesAfterDebit['acc-bank']).toBe(87000); // 103000 - 16000
+    expect(balancesAfterDebit['acc-card']).toBe(0);
+  });
+
+  it('クレジットカードへの両替収入や調整プラスは請求額から差し引かれる', () => {
+    const categoryNameMap = new Map<string, string>([
+      ['cat-food', '食費'],
+      ['cat-exchange', '両替'],
+    ]);
+    const txs: Transaction[] = [
+      {
+        id: 'tx-1',
+        date: '2026-11-05',
+        type: 'expense',
+        amount: 10000,
+        accountId: 'acc-card',
+        categoryId: 'cat-food',
+        description: '立て替え含む支払い',
+        createdAt: '2026-11-05T10:00:00Z',
+        updatedAt: '2026-11-05T10:00:00Z',
+      },
+      {
+        id: 'tx-2',
+        date: '2026-11-10',
+        type: 'income',
+        amount: 3000,
+        accountId: 'acc-card',
+        categoryId: 'cat-exchange',
+        description: 'カードへの返金・両替',
+        createdAt: '2026-11-10T10:00:00Z',
+        updatedAt: '2026-11-10T10:00:00Z',
+      },
+    ];
+
+    const summary = calculateCardBillingSummary(cardAccount, txs, '2026-11-15', categoryNameMap);
+    expect(summary.unpaidTotal).toBe(7000);
+
+    const balancesAfterDebit = calculateAccountBalances(
+      [bankAccount, cardAccount],
+      txs,
+      '2026-12-28',
+      categoryNameMap
+    );
+    expect(balancesAfterDebit['acc-bank']).toBe(93000);
+    expect(balancesAfterDebit['acc-card']).toBe(0);
   });
 });

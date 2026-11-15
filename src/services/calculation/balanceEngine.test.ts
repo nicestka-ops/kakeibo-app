@@ -540,4 +540,48 @@ describe('balanceEngine', () => {
       expect(trend[0].netAssets).toBe(80000);
     });
   });
+
+  describe('exchange category handling', () => {
+    const categoryNameMap = new Map<string, string>([
+      ['cat-food', '食費'],
+      ['cat-exchange', '両替'],
+      ['cat-adjust', '調整'],
+      ['cat-expense', '経費'],
+    ]);
+
+    it('should reduce expense for income in exchange category and add expense for expense in exchange category', () => {
+      const transactions = [
+        createTransaction({ id: 'tx-1', type: 'income', amount: 200000, categoryId: 'cat-salary', date: '2026-01-10' }),
+        createTransaction({ id: 'tx-2', type: 'expense', amount: 10000, categoryId: 'cat-food', date: '2026-01-12' }),
+        // 立て替え分3000円が両替(収入)で返金された
+        createTransaction({ id: 'tx-3', type: 'income', amount: 3000, categoryId: 'cat-exchange', date: '2026-01-15' }),
+      ];
+
+      const flow = calculateMonthlyCashFlow(transactions, '2026-01', categoryNameMap);
+      expect(flow.income).toBe(200000);
+      expect(flow.expense).toBe(7000); // 10000 - 3000
+      expect(flow.netSavings).toBe(193000);
+
+      // 返金のみの場合は両替カテゴリが0以下になるためカテゴリ別内訳には出ない
+      const breakdown = calculateCategoryBreakdown(transactions, '2026-01', categoryNameMap);
+      expect(breakdown['cat-food']).toBe(10000);
+      expect(breakdown['cat-exchange']).toBeUndefined();
+    });
+
+    it('should offset exchange expense and exchange income in cash flow and category breakdown', () => {
+      const transactions = [
+        createTransaction({ id: 'tx-1', type: 'expense', amount: 5000, categoryId: 'cat-exchange', date: '2026-01-12' }),
+        createTransaction({ id: 'tx-2', type: 'income', amount: 5000, categoryId: 'cat-exchange', date: '2026-01-15' }),
+        createTransaction({ id: 'tx-3', type: 'expense', amount: 2000, categoryId: 'cat-food', date: '2026-01-16' }),
+      ];
+
+      const flow = calculateMonthlyCashFlow(transactions, '2026-01', categoryNameMap);
+      expect(flow.income).toBe(0);
+      expect(flow.expense).toBe(2000);
+
+      const breakdown = calculateCategoryBreakdown(transactions, '2026-01', categoryNameMap);
+      expect(breakdown['cat-food']).toBe(2000);
+      expect(breakdown['cat-exchange']).toBeUndefined();
+    });
+  });
 });
