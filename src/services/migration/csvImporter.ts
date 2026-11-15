@@ -26,7 +26,17 @@ function inferAccountType(name: string): AccountType {
   if (name.includes('銀行') || lower.includes('bank')) return 'bank';
   if (name.includes('現金') || lower.includes('cash')) return 'cash';
   if (name.includes('商品券') || name.includes('ギフト') || lower.includes('gift')) return 'gift_card';
-  if (name.includes('カード') || name.includes('クレカ') || lower.includes('card')) return 'credit_card';
+  if (
+    name.includes('カード') ||
+    name.includes('クレカ') ||
+    lower.includes('card') ||
+    lower.includes('mastercard') ||
+    lower.includes('visa') ||
+    lower.includes('jcb') ||
+    lower.includes('amex')
+  ) {
+    return 'credit_card';
+  }
   if (name.includes('アプリ') || name.includes('電子マネー') || lower.includes('pay') || lower.includes('wallet')) {
     return 'wallet';
   }
@@ -153,22 +163,28 @@ export function importTransactionsCSV(
         type = 'adjustment';
       }
 
-      let accountId = localAccountMap.get(accountName);
+      const effectiveAccountName =
+        type === 'expense' && accountName === 'PayPay銀行'
+          ? 'Amazon Prime Mastercard'
+          : accountName;
+
+      let accountId = localAccountMap.get(effectiveAccountName);
       if (!accountId) {
         accountId = `acc-imp-${Date.now()}-${createdAccounts.length + 1}-${Math.random().toString(36).slice(2, 6)}`;
+        const accType = inferAccountType(effectiveAccountName);
         const newAcc: Account = {
           id: accountId,
-          name: accountName,
-          type: inferAccountType(accountName),
+          name: effectiveAccountName,
+          type: accType,
           openingBalance: 0,
           openingBalanceDate: date,
-          includeInAssets: true,
+          includeInAssets: accType !== 'credit_card',
           sortOrder: localAccountMap.size + 1,
           isActive: true,
           createdAt: nowIso,
           updatedAt: nowIso,
         };
-        localAccountMap.set(accountName, accountId);
+        localAccountMap.set(effectiveAccountName, accountId);
         createdAccounts.push(newAcc);
       }
 

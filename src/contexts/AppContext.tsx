@@ -78,6 +78,7 @@ interface AppContextType {
   syncError: string | null;
   syncMissingTable: boolean;
   syncNow: () => Promise<void>;
+  migratePayPayExpensesToMastercard: () => number;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -311,6 +312,78 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     await pullOrMergeInitial(false);
   }, [user, supabaseClient, pullOrMergeInitial]);
 
+  const migratePayPayExpensesToMastercard = useCallback((): number => {
+    const current = latestPayloadRef.current;
+    const paypayAccounts = current.accounts.filter((a) => a.name.trim() === 'PayPay銀行');
+    if (paypayAccounts.length === 0) return 0;
+
+    const paypayIds = new Set(paypayAccounts.map((a) => a.id));
+    const targetTransactions = current.transactions.filter(
+      (tx) => paypayIds.has(tx.accountId) && tx.type === 'expense'
+    );
+    if (targetTransactions.length === 0) return 0;
+
+    const nowIso = new Date().toISOString();
+    const existingCard = current.accounts.find(
+      (a) => a.name.trim().toLowerCase() === 'amazon prime mastercard'
+    );
+
+    let cardId: string;
+    let nextAccounts = [...current.accounts];
+
+    if (existingCard) {
+      cardId = existingCard.id;
+      if (existingCard.type !== 'credit_card' || existingCard.includeInAssets !== false) {
+        nextAccounts = nextAccounts.map((a) =>
+          a.id === cardId
+            ? { ...a, type: 'credit_card', includeInAssets: false, updatedAt: nowIso }
+            : a
+        );
+      }
+    } else {
+      cardId = `acc-amz-mc-${Date.now()}`;
+      const earliestDate = targetTransactions.reduce(
+        (min, tx) => (tx.date < min ? tx.date : min),
+        targetTransactions[0].date
+      );
+      const newCardAccount: Account = {
+        id: cardId,
+        name: 'Amazon Prime Mastercard',
+        type: 'credit_card',
+        openingBalance: 0,
+        openingBalanceDate: earliestDate,
+        includeInAssets: false,
+        sortOrder: nextAccounts.length + 1,
+        isActive: true,
+        createdAt: nowIso,
+        updatedAt: nowIso,
+      };
+      nextAccounts = [...nextAccounts, newCardAccount];
+    }
+
+    const nextTransactions = current.transactions.map((tx) =>
+      paypayIds.has(tx.accountId) && tx.type === 'expense'
+        ? { ...tx, accountId: cardId, updatedAt: nowIso }
+        : tx
+    );
+
+    setAccounts(nextAccounts);
+    setTransactions(nextTransactions);
+    return targetTransactions.length;
+  }, []);
+
+  // 初回同期完了後に PayPay銀行の支出を Amazon Prime Mastercard へ自動修正（1回のみ）
+  useEffect(() => {
+    const migrationKey = 'kakeibo_migrated_paypay_to_amz_card_v1';
+    if (localStorage.getItem(migrationKey) === 'done') return;
+    if (user && supabaseClient && syncStatus !== 'synced') return;
+
+    const migratedCount = migratePayPayExpensesToMastercard();
+    if (migratedCount > 0 || (syncStatus === 'synced' || !user)) {
+      localStorage.setItem(migrationKey, 'done');
+    }
+  }, [user, supabaseClient, syncStatus, migratePayPayExpensesToMastercard]);
+
   const accountBalances = calculateAccountBalances(accounts, transactions);
   const financialSummary = calculateFinancialSummary(accounts, accountBalances);
   const monthlyCashFlow = calculateMonthlyCashFlow(transactions, selectedYearMonth);
@@ -479,6 +552,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         syncError,
         syncMissingTable,
         syncNow,
+        migratePayPayExpensesToMastercard,
       }}
     >
       {children}

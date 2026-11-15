@@ -19,6 +19,7 @@ export const SettingsPage: React.FC = () => {
     syncError,
     syncMissingTable,
     syncNow,
+    migratePayPayExpensesToMastercard,
   } = useApp();
   const {
     user,
@@ -262,6 +263,35 @@ export const SettingsPage: React.FC = () => {
               className="px-3.5 py-2 text-xs font-bold bg-white dark:bg-slate-700 text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-600 rounded-xl shadow-sm hover:bg-slate-50 transition"
             >
               読み込む
+            </button>
+          </div>
+
+          <div className="flex items-center justify-between p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-100 dark:border-slate-800">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-purple-500/10 text-purple-600 dark:text-purple-400 flex items-center justify-center">
+                <RefreshCw className="w-5 h-5" />
+              </div>
+              <div>
+                <h4 className="font-bold text-sm text-slate-800 dark:text-slate-100">
+                  PayPay銀行の支出をクレカへ一括修正
+                </h4>
+                <p className="text-xs text-slate-400">
+                  PayPay銀行の支出のみ Amazon Prime Mastercard（クレジットカード）へ移動します（収入は銀行のまま維持）
+                </p>
+              </div>
+            </div>
+            <button
+              onClick={() => {
+                const count = migratePayPayExpensesToMastercard();
+                if (count > 0) {
+                  alert(`${count} 件の支出データを Amazon Prime Mastercard へ修正しました。`);
+                } else {
+                  alert('修正対象の「PayPay銀行の支出」データはありませんでした。');
+                }
+              }}
+              className="px-3.5 py-2 text-xs font-bold bg-white dark:bg-slate-700 text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-600 rounded-xl shadow-sm hover:bg-slate-50 transition whitespace-nowrap"
+            >
+              一括修正
             </button>
           </div>
 
