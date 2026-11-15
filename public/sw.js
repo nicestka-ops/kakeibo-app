@@ -1,5 +1,5 @@
 // Service Worker for kakeibo PWA
-const CACHE_NAME = 'kakeibo-v2';
+const CACHE_NAME = 'kakeibo-v3';
 const STATIC_ASSETS = [
   './',
   './index.html',
