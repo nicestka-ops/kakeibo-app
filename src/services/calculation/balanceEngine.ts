@@ -105,11 +105,18 @@ export function calculateAccountBalances(
       case 'card_payment': {
         // クレジットカード口座への card_payment は残高を増やす（負債を減らす）
         // 銀行口座への card_payment は残高を減らす（引き落とし）
+        // linkedCardId が指定されている単一エントリ方式の場合は連携カードの負債も減らす
         const acc = accounts.find((a) => a.id === tx.accountId);
         if (acc && acc.type === 'credit_card') {
           balances[tx.accountId] += amount;
         } else {
           balances[tx.accountId] -= amount;
+          if (tx.linkedCardId) {
+            if (!(tx.linkedCardId in balances)) {
+              balances[tx.linkedCardId] = 0;
+            }
+            balances[tx.linkedCardId] += amount;
+          }
         }
         break;
       }

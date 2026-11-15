@@ -268,4 +268,48 @@ describe('cardBilling', () => {
     expect(balancesAfterDebit['acc-bank']).toBe(93000);
     expect(balancesAfterDebit['acc-card']).toBe(0);
   });
+
+  it('銀行口座側の card_payment（linkedCardId あり）がある場合は二重引き落としにならず残高とカード負債が正しく一致する', () => {
+    const txs: Transaction[] = [
+      {
+        id: 'tx-sep',
+        date: '2026-09-15',
+        type: 'expense',
+        amount: 16119,
+        accountId: 'acc-card',
+        description: '9月カード利用',
+        createdAt: '2026-09-15T10:00:00Z',
+        updatedAt: '2026-09-15T10:00:00Z',
+      },
+      {
+        id: 'tx-debit-sep',
+        date: '2026-10-26',
+        type: 'card_payment',
+        amount: 16119,
+        accountId: 'acc-bank',
+        linkedCardId: 'acc-card',
+        description: 'カード引き落とし（自動・10月分／9月利用分）',
+        createdAt: '2026-10-26T10:00:00Z',
+        updatedAt: '2026-10-26T10:00:00Z',
+      },
+      {
+        id: 'tx-oct',
+        date: '2026-10-20',
+        type: 'expense',
+        amount: 36050,
+        accountId: 'acc-card',
+        description: '10月カード利用',
+        createdAt: '2026-10-20T10:00:00Z',
+        updatedAt: '2026-10-20T10:00:00Z',
+      },
+    ];
+
+    const summary = calculateCardBillingSummary(cardAccount, txs, '2026-11-15');
+    expect(summary.debitedTotal).toBe(0); // 16119はすでに linkedBankPayment で引き落とし済み
+    expect(summary.unpaidTotal).toBe(36050);
+
+    const balances = calculateAccountBalances([bankAccount, cardAccount], txs, '2026-11-15');
+    expect(balances['acc-bank']).toBe(100000 - 16119);
+    expect(balances['acc-card']).toBe(-36050);
+  });
 });

@@ -163,6 +163,15 @@ export function importTransactionsCSV(
         type = 'adjustment';
       }
 
+      const isCardDebitRecord =
+        type === 'expense' &&
+        accountName === 'PayPay銀行' &&
+        description.includes('カード引き落とし');
+
+      if (isCardDebitRecord) {
+        type = 'card_payment';
+      }
+
       const effectiveAccountName =
         type === 'expense' && accountName === 'PayPay銀行'
           ? 'Amazon Prime Mastercard'
@@ -239,6 +248,15 @@ export function importTransactionsCSV(
       });
     } catch (err: unknown) {
       result.errors.push(`行 ${i + 1} の処理中にエラー: ${(err as Error).message}`);
+    }
+  }
+
+  const amzCardId = localAccountMap.get('Amazon Prime Mastercard');
+  if (amzCardId) {
+    for (const tx of result.data) {
+      if (tx.type === 'card_payment' && !tx.linkedCardId && tx.description.includes('カード引き落とし')) {
+        tx.linkedCardId = amzCardId;
+      }
     }
   }
 

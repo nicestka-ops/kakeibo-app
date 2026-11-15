@@ -81,13 +81,25 @@ export function calculateCardBillingSummary(
   let manualPaymentTotal = 0;
 
   for (const tx of transactions) {
-    if (tx.accountId !== cardAccount.id) continue;
     if (seenIds.has(tx.id)) continue;
-    seenIds.add(tx.id);
-
     if (tx.date > asOfDate) continue;
 
+    const isCardTx = tx.accountId === cardAccount.id;
+    const isLinkedBankPayment =
+      tx.type === 'card_payment' &&
+      Boolean(cardAccount.paymentAccountId) &&
+      tx.accountId === cardAccount.paymentAccountId &&
+      tx.linkedCardId === cardAccount.id;
+
+    if (!isCardTx && !isLinkedBankPayment) continue;
+    seenIds.add(tx.id);
+
     const amount = Math.round(Math.abs(tx.amount));
+    if (isLinkedBankPayment) {
+      manualPaymentTotal += amount;
+      continue;
+    }
+
     if (tx.type === 'expense') {
       const { year, month } = getClosingPeriodForDate(tx.date, closingDay);
       const closingYm = `${year}-${String(month).padStart(2, '0')}`;

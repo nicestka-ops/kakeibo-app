@@ -319,7 +319,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     const paypayIds = new Set(paypayAccounts.map((a) => a.id));
     const targetTransactions = current.transactions.filter(
-      (tx) => paypayIds.has(tx.accountId) && tx.type === 'expense'
+      (tx) =>
+        paypayIds.has(tx.accountId) &&
+        tx.type === 'expense' &&
+        !tx.description?.includes('カード引き落とし')
     );
     if (targetTransactions.length === 0) return 0;
 
@@ -383,7 +386,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
 
     const nextTransactions = current.transactions.map((tx) =>
-      paypayIds.has(tx.accountId) && tx.type === 'expense'
+      paypayIds.has(tx.accountId) &&
+      tx.type === 'expense' &&
+      !tx.description?.includes('カード引き落とし')
         ? { ...tx, accountId: cardId, updatedAt: nowIso }
         : tx
     );
@@ -442,6 +447,48 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     if (syncStatus === 'synced' || !user) {
       localStorage.setItem(billingMigrationKey, 'done');
+    }
+  }, [user, supabaseClient, syncStatus]);
+
+  // 誤ってクレジットカード口座へ移行された「カード引き落とし」取引を銀行口座の card_payment へ修復（1回のみ）
+  useEffect(() => {
+    const fixKey = 'kakeibo_fix_card_debit_tx_v1';
+    if (localStorage.getItem(fixKey) === 'done') return;
+    if (user && supabaseClient && syncStatus !== 'synced') return;
+
+    const current = latestPayloadRef.current;
+    const paypayBank = current.accounts.find((a) => a.name.trim() === 'PayPay銀行');
+    const cardMap = new Map(
+      current.accounts.filter((a) => a.type === 'credit_card').map((a) => [a.id, a])
+    );
+
+    let fixedCount = 0;
+    const nowIso = new Date().toISOString();
+    const nextTransactions = current.transactions.map((tx) => {
+      if (tx.type !== 'expense' || !tx.description?.includes('カード引き落とし')) {
+        return tx;
+      }
+      const card = cardMap.get(tx.accountId);
+      const targetBankId = card?.paymentAccountId || paypayBank?.id;
+      if (card && targetBankId) {
+        fixedCount += 1;
+        return {
+          ...tx,
+          accountId: targetBankId,
+          type: 'card_payment' as const,
+          linkedCardId: card.id,
+          updatedAt: nowIso,
+        };
+      }
+      return tx;
+    });
+
+    if (fixedCount > 0) {
+      setTransactions(nextTransactions);
+    }
+
+    if (syncStatus === 'synced' || !user) {
+      localStorage.setItem(fixKey, 'done');
     }
   }, [user, supabaseClient, syncStatus]);
 
