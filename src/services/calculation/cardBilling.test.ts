@@ -167,5 +167,15 @@ describe('cardBilling', () => {
       categoryNameMap
     );
     expect(cardSummary.unpaidTotal).toBe(11000);
+
+    // 口座残高には両替(-5000)・調整(+2000)・経費(-8000)のすべてが増減反映される
+    const balances = calculateAccountBalances(
+      [bankAccount, cardAccount],
+      mixedTransactions,
+      '2026-11-15',
+      categoryNameMap
+    );
+    expect(balances['acc-bank']).toBe(97000); // 100000 - 5000(両替) + 2000(調整)
+    expect(balances['acc-card']).toBe(-11000); // -3000(食費) - 8000(経費)
   });
 });
