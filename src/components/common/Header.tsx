@@ -1,7 +1,7 @@
 import React from 'react';
 import { useApp } from '@/contexts/AppContext';
 import { useTheme } from '@/contexts/ThemeContext';
-import { ChevronLeft, ChevronRight, Moon, Sun, Plus, Menu } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Moon, Sun, Plus, Menu, Cloud, CloudOff, RefreshCw } from 'lucide-react';
 
 interface HeaderProps {
   onOpenTransactionModal: () => void;
@@ -10,7 +10,7 @@ interface HeaderProps {
 }
 
 export const Header: React.FC<HeaderProps> = ({ onOpenTransactionModal, onToggleSidebar, sidebarOpen }) => {
-  const { selectedYearMonth, setSelectedYearMonth } = useApp();
+  const { selectedYearMonth, setSelectedYearMonth, syncStatus, syncError, syncNow } = useApp();
   const { isDark, toggleTheme } = useTheme();
 
   const [yearStr, monthStr] = selectedYearMonth.split('-');
@@ -72,6 +72,37 @@ export const Header: React.FC<HeaderProps> = ({ onOpenTransactionModal, onToggle
         </div>
 
         <div className="flex items-center gap-1.5 sm:gap-2">
+          {syncStatus !== 'idle' && (
+            <button
+              onClick={() => void syncNow()}
+              title={
+                syncStatus === 'syncing'
+                  ? 'クラウドと同期中...'
+                  : syncStatus === 'error'
+                  ? `同期エラー: ${syncError || '再試行'}`
+                  : 'クラウド同期済み（クリックで今すぐ同期）'
+              }
+              className={`flex items-center gap-1 px-2 py-1.5 rounded-xl text-xs font-medium transition ${
+                syncStatus === 'error'
+                  ? 'text-rose-600 dark:text-rose-400 bg-rose-50 dark:bg-rose-950/40 hover:bg-rose-100'
+                  : syncStatus === 'syncing'
+                  ? 'text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/40'
+                  : 'text-emerald-600 dark:text-emerald-400 hover:bg-slate-100 dark:hover:bg-slate-800'
+              }`}
+              aria-label="同期ステータス"
+            >
+              {syncStatus === 'syncing' ? (
+                <RefreshCw className="w-4 h-4 animate-spin" />
+              ) : syncStatus === 'error' ? (
+                <CloudOff className="w-4 h-4" />
+              ) : (
+                <Cloud className="w-4 h-4" />
+              )}
+              <span className="hidden md:inline">
+                {syncStatus === 'syncing' ? '同期中' : syncStatus === 'error' ? '同期エラー' : '同期済み'}
+              </span>
+            </button>
+          )}
           <button
             onClick={toggleTheme}
             className="p-2 text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 transition"

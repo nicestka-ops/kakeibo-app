@@ -4,10 +4,22 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useTheme } from '@/contexts/ThemeContext';
 import { Card } from '@/components/common/Card';
 import { exportTransactionsCSV, importTransactionsCSV } from '@/services/migration/csvImporter';
-import { Moon, Sun, Monitor, Download, Upload, RefreshCw, ShieldCheck, Database, Palette, Bell, Key, Trash2, LogIn, LogOut, User as UserIcon } from 'lucide-react';
+import { SYNC_SETUP_SQL } from '@/services/sync/cloudSync';
+import { Moon, Sun, Monitor, Download, Upload, RefreshCw, ShieldCheck, Database, Palette, Bell, Key, Trash2, LogIn, LogOut, User as UserIcon, Cloud, CloudOff } from 'lucide-react';
 
 export const SettingsPage: React.FC = () => {
-  const { transactions, accounts, categories, resetToDefaultData, importTransactionsBatch } = useApp();
+  const {
+    transactions,
+    accounts,
+    categories,
+    resetToDefaultData,
+    importTransactionsBatch,
+    syncStatus,
+    lastSyncedAt,
+    syncError,
+    syncMissingTable,
+    syncNow,
+  } = useApp();
   const {
     user,
     loading: authLoading,
@@ -145,6 +157,68 @@ export const SettingsPage: React.FC = () => {
             <span className="text-xs font-bold">端末に合わせる</span>
           </button>
         </div>
+      </Card>
+
+      {/* Cloud Sync */}
+      <Card title="クラウド同期（アカウント間同期）">
+        <p className="text-xs text-slate-400 mb-4">
+          同じ Google アカウントでログインした PC・スマホ間で自動的に家計簿データを同期します。
+        </p>
+        <div className="flex items-center justify-between p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-100 dark:border-slate-800">
+          <div className="flex items-center gap-3">
+            <div
+              className={`w-10 h-10 rounded-xl flex items-center justify-center ${
+                syncStatus === 'error'
+                  ? 'bg-rose-500/10 text-rose-600 dark:text-rose-400'
+                  : 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400'
+              }`}
+            >
+              {syncStatus === 'error' ? (
+                <CloudOff className="w-5 h-5" />
+              ) : (
+                <Cloud className="w-5 h-5" />
+              )}
+            </div>
+            <div>
+              <h4 className="font-bold text-sm text-slate-800 dark:text-slate-100">
+                {syncStatus === 'syncing'
+                  ? '同期中...'
+                  : syncStatus === 'error'
+                  ? '同期エラー'
+                  : syncStatus === 'synced'
+                  ? '同期済み'
+                  : '未同期'}
+              </h4>
+              <p className="text-xs text-slate-400">
+                {lastSyncedAt
+                  ? `最終同期: ${new Date(lastSyncedAt).toLocaleString('ja-JP')}`
+                  : 'ログイン中のアカウントと同期します'}
+              </p>
+            </div>
+          </div>
+          <button
+            onClick={() => void syncNow()}
+            disabled={syncStatus === 'syncing'}
+            className="flex items-center gap-1.5 px-3.5 py-2 text-xs font-bold bg-white dark:bg-slate-700 text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-600 rounded-xl shadow-sm hover:bg-slate-50 disabled:opacity-50 transition"
+          >
+            <RefreshCw className={`w-3.5 h-3.5 ${syncStatus === 'syncing' ? 'animate-spin' : ''}`} />
+            <span>今すぐ同期</span>
+          </button>
+        </div>
+
+        {syncError && (
+          <div className="mt-3 p-3 rounded-xl bg-rose-50 dark:bg-rose-950/30 border border-rose-200 dark:border-rose-800 text-xs text-rose-700 dark:text-rose-300 space-y-2">
+            <p className="font-bold">{syncError}</p>
+            {syncMissingTable && (
+              <div className="space-y-1.5">
+                <p>Supabase の SQL Editor で以下の SQL を一度だけ実行してください：</p>
+                <pre className="p-2 rounded-lg bg-slate-900 text-slate-100 overflow-x-auto text-[11px] leading-relaxed">
+                  {SYNC_SETUP_SQL}
+                </pre>
+              </div>
+            )}
+          </div>
+        )}
       </Card>
 
       {/* Data Management */}

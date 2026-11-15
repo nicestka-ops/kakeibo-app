@@ -1,5 +1,15 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
 import { Account, Category, MonthlyBudget, PlannedExpense, SavingsGoal, Transaction } from '@/types';
+import { useAuth } from '@/contexts/AuthContext';
+import {
+  fetchCloudData,
+  getCloudSyncMeta,
+  hasMeaningfulKakeiboData,
+  KAKEIBO_SYNC_TABLE,
+  KakeiboCloudPayload,
+  saveCloudSyncMeta,
+  upsertCloudData,
+} from '@/services/sync/cloudSync';
 import {
   DEFAULT_ACCOUNTS,
   DEFAULT_BUDGET,
@@ -24,6 +34,8 @@ import {
 export interface TransferInput {
   toAccountId: string; // 振替先口座ID
 }
+
+export type SyncStatus = 'idle' | 'syncing' | 'synced' | 'error';
 
 interface AppContextType {
   accounts: Account[];
@@ -61,11 +73,17 @@ interface AppContextType {
     newCategories?: Category[]
   ) => void;
   resetToDefaultData: () => void;
+  syncStatus: SyncStatus;
+  lastSyncedAt: string | null;
+  syncError: string | null;
+  syncMissingTable: boolean;
+  syncNow: () => Promise<void>;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
 
 export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const { user, supabaseClient } = useAuth();
   const [selectedYearMonth, setSelectedYearMonth] = useState<string>(() => {
     const now = new Date();
     return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
@@ -90,12 +108,208 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     loadFromStorage(STORAGE_KEYS.SAVINGS_GOALS, DEFAULT_SAVINGS_GOALS)
   );
 
+  const [syncStatus, setSyncStatus] = useState<SyncStatus>('idle');
+  const [lastSyncedAt, setLastSyncedAt] = useState<string | null>(null);
+  const [syncError, setSyncError] = useState<string | null>(null);
+  const [syncMissingTable, setSyncMissingTable] = useState<boolean>(false);
+
+  const hasInitializedSyncRef = useRef<boolean>(false);
+  const isApplyingRemoteRef = useRef<boolean>(false);
+  const lastSyncedUpdatedAtRef = useRef<string | null>(null);
+  const latestPayloadRef = useRef<KakeiboCloudPayload>({
+    accounts,
+    transactions,
+    categories,
+    budget,
+    plannedExpenses,
+    savingsGoals,
+  });
+
+  latestPayloadRef.current = {
+    accounts,
+    transactions,
+    categories,
+    budget,
+    plannedExpenses,
+    savingsGoals,
+  };
+
   useEffect(() => { saveToStorage(STORAGE_KEYS.ACCOUNTS, accounts); }, [accounts]);
   useEffect(() => { saveToStorage(STORAGE_KEYS.TRANSACTIONS, transactions); }, [transactions]);
   useEffect(() => { saveToStorage(STORAGE_KEYS.CATEGORIES, categories); }, [categories]);
   useEffect(() => { saveToStorage(STORAGE_KEYS.BUDGETS, budget); }, [budget]);
   useEffect(() => { saveToStorage(STORAGE_KEYS.PLANNED_EXPENSES, plannedExpenses); }, [plannedExpenses]);
   useEffect(() => { saveToStorage(STORAGE_KEYS.SAVINGS_GOALS, savingsGoals); }, [savingsGoals]);
+
+  const applyRemotePayload = useCallback(
+    (payload: KakeiboCloudPayload, updatedAt: string, userId: string) => {
+      isApplyingRemoteRef.current = true;
+      setAccounts(Array.isArray(payload.accounts) ? payload.accounts : DEFAULT_ACCOUNTS);
+      setTransactions(Array.isArray(payload.transactions) ? payload.transactions : DEFAULT_TRANSACTIONS);
+      setCategories(Array.isArray(payload.categories) ? payload.categories : DEFAULT_CATEGORIES);
+      setBudget(payload.budget && typeof payload.budget === 'object' ? payload.budget : DEFAULT_BUDGET);
+      setPlannedExpenses(
+        Array.isArray(payload.plannedExpenses) ? payload.plannedExpenses : DEFAULT_PLANNED_EXPENSES
+      );
+      setSavingsGoals(
+        Array.isArray(payload.savingsGoals) ? payload.savingsGoals : DEFAULT_SAVINGS_GOALS
+      );
+      lastSyncedUpdatedAtRef.current = updatedAt;
+      saveCloudSyncMeta(userId, updatedAt);
+      setLastSyncedAt(updatedAt);
+    },
+    []
+  );
+
+  const pushLocalToCloud = useCallback(async () => {
+    if (!user || !supabaseClient) return;
+    setSyncStatus('syncing');
+    const res = await upsertCloudData(supabaseClient, user.id, latestPayloadRef.current);
+    if (res.error) {
+      setSyncStatus('error');
+      setSyncError(res.error);
+      setSyncMissingTable(Boolean(res.missingTable));
+      return;
+    }
+    if (res.updatedAt) {
+      lastSyncedUpdatedAtRef.current = res.updatedAt;
+      saveCloudSyncMeta(user.id, res.updatedAt);
+      setLastSyncedAt(res.updatedAt);
+    }
+    setSyncError(null);
+    setSyncMissingTable(false);
+    setSyncStatus('synced');
+  }, [user, supabaseClient]);
+
+  const pullOrMergeInitial = useCallback(
+    async (isInitial: boolean) => {
+      if (!user || !supabaseClient) return;
+      setSyncStatus('syncing');
+      const remote = await fetchCloudData(supabaseClient, user.id);
+
+      if (remote.error) {
+        setSyncStatus('error');
+        setSyncError(remote.error);
+        setSyncMissingTable(Boolean(remote.missingTable));
+        return;
+      }
+
+      setSyncMissingTable(false);
+      setSyncError(null);
+
+      if (remote.exists && remote.data && remote.updatedAt) {
+        const localPayload = latestPayloadRef.current;
+        const meta = getCloudSyncMeta(user.id);
+        const shouldSeedCloudFromLocal =
+          isInitial &&
+          !meta &&
+          hasMeaningfulKakeiboData(localPayload) &&
+          !hasMeaningfulKakeiboData(remote.data);
+
+        if (shouldSeedCloudFromLocal) {
+          await pushLocalToCloud();
+        } else if (lastSyncedUpdatedAtRef.current !== remote.updatedAt) {
+          applyRemotePayload(remote.data, remote.updatedAt, user.id);
+          setSyncStatus('synced');
+        } else {
+          setLastSyncedAt(remote.updatedAt);
+          setSyncStatus('synced');
+        }
+      } else {
+        await pushLocalToCloud();
+      }
+    },
+    [user, supabaseClient, applyRemotePayload, pushLocalToCloud]
+  );
+
+  // ログイン時の初回同期 & Realtime 購読 & タブ復帰時の再同期
+  useEffect(() => {
+    if (!user || !supabaseClient) {
+      hasInitializedSyncRef.current = false;
+      setSyncStatus('idle');
+      setSyncError(null);
+      setSyncMissingTable(false);
+      return;
+    }
+
+    let cancelled = false;
+    hasInitializedSyncRef.current = false;
+
+    const init = async () => {
+      await pullOrMergeInitial(true);
+      if (!cancelled) {
+        hasInitializedSyncRef.current = true;
+      }
+    };
+    void init();
+
+    const channel = supabaseClient
+      .channel(`kakeibo-sync-${user.id}`)
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: KAKEIBO_SYNC_TABLE,
+          filter: `user_id=eq.${user.id}`,
+        },
+        (payload) => {
+          const row = payload.new as { data?: KakeiboCloudPayload; updated_at?: string } | null;
+          if (!row?.data || !row.updated_at) return;
+          if (lastSyncedUpdatedAtRef.current === row.updated_at) return;
+          applyRemotePayload(row.data, row.updated_at, user.id);
+          setSyncError(null);
+          setSyncMissingTable(false);
+          setSyncStatus('synced');
+        }
+      )
+      .subscribe();
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible' && hasInitializedSyncRef.current) {
+        void pullOrMergeInitial(false);
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
+    return () => {
+      cancelled = true;
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      void supabaseClient.removeChannel(channel);
+    };
+  }, [user, supabaseClient, pullOrMergeInitial, applyRemotePayload]);
+
+  // ローカルデータ変更時にクラウドへ自動保存（デバウンス）
+  useEffect(() => {
+    if (!user || !supabaseClient || !hasInitializedSyncRef.current) return;
+    if (isApplyingRemoteRef.current) {
+      isApplyingRemoteRef.current = false;
+      return;
+    }
+
+    const timer = window.setTimeout(() => {
+      void pushLocalToCloud();
+    }, 700);
+
+    return () => {
+      window.clearTimeout(timer);
+    };
+  }, [
+    accounts,
+    transactions,
+    categories,
+    budget,
+    plannedExpenses,
+    savingsGoals,
+    user,
+    supabaseClient,
+    pushLocalToCloud,
+  ]);
+
+  const syncNow = useCallback(async () => {
+    if (!user || !supabaseClient) return;
+    await pullOrMergeInitial(false);
+  }, [user, supabaseClient, pullOrMergeInitial]);
 
   const accountBalances = calculateAccountBalances(accounts, transactions);
   const financialSummary = calculateFinancialSummary(accounts, accountBalances);
@@ -260,6 +474,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         updateSavingsGoal,
         importTransactionsBatch,
         resetToDefaultData,
+        syncStatus,
+        lastSyncedAt,
+        syncError,
+        syncMissingTable,
+        syncNow,
       }}
     >
       {children}

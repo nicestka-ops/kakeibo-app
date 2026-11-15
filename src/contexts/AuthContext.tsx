@@ -13,6 +13,7 @@ import {
 interface AuthContextType {
   user: User | null;
   session: Session | null;
+  supabaseClient: SupabaseClient | null;
   loading: boolean;
   isConfigured: boolean;
   isEnvConfigured: boolean;
@@ -174,6 +175,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       value={{
         user,
         session,
+        supabaseClient: client,
         loading,
         isConfigured: Boolean(client),
         isEnvConfigured: hasEnvSupabaseConfig,
