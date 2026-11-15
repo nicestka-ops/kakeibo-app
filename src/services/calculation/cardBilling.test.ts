@@ -1,5 +1,5 @@
 import { Account, Transaction } from '@/types';
-import { calculateAccountBalances } from './balanceEngine';
+import { calculateAccountBalances, calculateCategoryBreakdown, calculateMonthlyCashFlow } from './balanceEngine';
 import { calculateCardBillingSummary } from './cardBilling';
 
 describe('cardBilling', () => {
@@ -93,5 +93,79 @@ describe('cardBilling', () => {
     expect(summary.debitedTotal).toBe(35000);
     expect(summary.unpaidTotal).toBe(15000);
     expect(summary.nextDebitDate).toBe('2026-12-10');
+  });
+
+  it('両替・調整・経費は月間収支・カテゴリ支出に含めず、経費のみクレジットカード支払いには含める', () => {
+    const categoryNameMap = new Map<string, string>([
+      ['cat-food', '食費'],
+      ['cat-exchange', '両替'],
+      ['cat-adjust', '調整'],
+      ['cat-expense', '経費'],
+    ]);
+
+    const mixedTransactions: Transaction[] = [
+      {
+        id: 'tx-food',
+        date: '2026-11-05',
+        type: 'expense',
+        amount: 3000,
+        accountId: 'acc-card',
+        categoryId: 'cat-food',
+        description: 'ランチ',
+        createdAt: '2026-11-05T10:00:00Z',
+        updatedAt: '2026-11-05T10:00:00Z',
+      },
+      {
+        id: 'tx-keihi',
+        date: '2026-11-06',
+        type: 'expense',
+        amount: 8000,
+        accountId: 'acc-card',
+        categoryId: 'cat-expense',
+        description: '備品立替',
+        createdAt: '2026-11-06T10:00:00Z',
+        updatedAt: '2026-11-06T10:00:00Z',
+      },
+      {
+        id: 'tx-exchange',
+        date: '2026-11-07',
+        type: 'expense',
+        amount: 5000,
+        accountId: 'acc-bank',
+        categoryId: 'cat-exchange',
+        description: '両替',
+        createdAt: '2026-11-07T10:00:00Z',
+        updatedAt: '2026-11-07T10:00:00Z',
+      },
+      {
+        id: 'tx-adjust',
+        date: '2026-11-08',
+        type: 'income',
+        amount: 2000,
+        accountId: 'acc-bank',
+        categoryId: 'cat-adjust',
+        description: '残高調整',
+        createdAt: '2026-11-08T10:00:00Z',
+        updatedAt: '2026-11-08T10:00:00Z',
+      },
+    ];
+
+    const flow = calculateMonthlyCashFlow(mixedTransactions, '2026-11', categoryNameMap);
+    expect(flow.income).toBe(0);
+    expect(flow.expense).toBe(3000); // 両替・調整・経費は除外され、食費のみ
+
+    const breakdown = calculateCategoryBreakdown(mixedTransactions, '2026-11', categoryNameMap);
+    expect(breakdown['cat-food']).toBe(3000);
+    expect(breakdown['cat-expense']).toBeUndefined();
+    expect(breakdown['cat-exchange']).toBeUndefined();
+
+    // クレジットカードの未払いには「経費(8000)」が含まれる（3000 + 8000 = 11000）
+    const cardSummary = calculateCardBillingSummary(
+      cardAccount,
+      mixedTransactions,
+      '2026-11-15',
+      categoryNameMap
+    );
+    expect(cardSummary.unpaidTotal).toBe(11000);
   });
 });

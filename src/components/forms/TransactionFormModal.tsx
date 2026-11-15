@@ -1,15 +1,21 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useApp } from '@/contexts/AppContext';
-import { TransactionType } from '@/types';
+import { Transaction, TransactionType } from '@/types';
 import { X, ArrowDownRight, ArrowUpRight, ArrowLeftRight } from 'lucide-react';
 
 interface TransactionFormModalProps {
   isOpen: boolean;
   onClose: () => void;
+  initialTransaction?: Transaction | null;
 }
 
-export const TransactionFormModal: React.FC<TransactionFormModalProps> = ({ isOpen, onClose }) => {
-  const { accounts, categories, addTransaction, addTransfer, selectedYearMonth } = useApp();
+export const TransactionFormModal: React.FC<TransactionFormModalProps> = ({
+  isOpen,
+  onClose,
+  initialTransaction = null,
+}) => {
+  const { accounts, categories, addTransaction, updateTransaction, addTransfer, selectedYearMonth } = useApp();
+  const isEditMode = Boolean(initialTransaction);
 
   const [type, setType] = useState<TransactionType>('expense');
   const [amount, setAmount] = useState<string>('');
@@ -23,9 +29,32 @@ export const TransactionFormModal: React.FC<TransactionFormModalProps> = ({ isOp
   const [description, setDescription] = useState<string>('');
   const [memo, setMemo] = useState<string>('');
 
+  useEffect(() => {
+    if (!isOpen) return;
+    if (initialTransaction) {
+      setType(initialTransaction.type);
+      setAmount(String(initialTransaction.amount));
+      setDate(initialTransaction.date);
+      setAccountId(initialTransaction.accountId);
+      setCategoryId(initialTransaction.categoryId || '');
+      setDescription(initialTransaction.description || '');
+      setMemo(initialTransaction.memo || '');
+    } else {
+      const today = new Date().toISOString().split('T')[0];
+      setType('expense');
+      setAmount('');
+      setDate(today.startsWith(selectedYearMonth) ? today : `${selectedYearMonth}-01`);
+      setAccountId(accounts[0]?.id || '');
+      setToAccountId(accounts[1]?.id || accounts[0]?.id || '');
+      setCategoryId(categories[0]?.id || '');
+      setDescription('');
+      setMemo('');
+    }
+  }, [isOpen, initialTransaction, selectedYearMonth, accounts, categories]);
+
   if (!isOpen) return null;
 
-  const isTransfer = type === 'transfer';
+  const isTransfer = !isEditMode && type === 'transfer';
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -45,7 +74,17 @@ export const TransactionFormModal: React.FC<TransactionFormModalProps> = ({ isOp
       '買い物・支出'
     );
 
-    if (isTransfer) {
+    if (isEditMode && initialTransaction) {
+      updateTransaction(initialTransaction.id, {
+        date,
+        type,
+        amount: parsedAmount,
+        accountId,
+        categoryId: categoryId || undefined,
+        description: baseDesc,
+        memo: memo.trim() || undefined,
+      });
+    } else if (isTransfer) {
       // 振替: transfer_out（移動元）+ transfer_in（移動先）の2エントリを生成
       addTransfer(
         {
@@ -76,9 +115,9 @@ export const TransactionFormModal: React.FC<TransactionFormModalProps> = ({ isOp
   };
 
   const filteredCategories = categories.filter((c) =>
-    type === 'expense'
-      ? c.kind === 'expense' || c.kind === 'both'
-      : c.kind === 'income' || c.kind === 'both'
+    type === 'income'
+      ? c.kind === 'income' || c.kind === 'both'
+      : c.kind === 'expense' || c.kind === 'both'
   );
 
   // 振替先の口座リスト（移動元を除く）
@@ -88,7 +127,9 @@ export const TransactionFormModal: React.FC<TransactionFormModalProps> = ({ isOp
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-fadeIn">
       <div className="bg-white dark:bg-slate-900 w-full max-w-lg rounded-3xl shadow-2xl border border-slate-100 dark:border-slate-800 overflow-hidden">
         <div className="flex items-center justify-between p-5 border-b border-slate-100 dark:border-slate-800">
-          <h2 className="text-lg font-bold text-slate-800 dark:text-slate-100">取引を記録</h2>
+          <h2 className="text-lg font-bold text-slate-800 dark:text-slate-100">
+            {isEditMode ? '取引を編集' : '取引を記録'}
+          </h2>
           <button
             onClick={onClose}
             className="p-2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 transition"
@@ -98,7 +139,7 @@ export const TransactionFormModal: React.FC<TransactionFormModalProps> = ({ isOp
         </div>
 
         {/* 取引タイプ選択 */}
-        <div className="grid grid-cols-3 gap-2 p-4 bg-slate-50 dark:bg-slate-800/50">
+        <div className={`grid ${isEditMode ? 'grid-cols-2' : 'grid-cols-3'} gap-2 p-4 bg-slate-50 dark:bg-slate-800/50`}>
           <button
             type="button"
             onClick={() => setType('expense')}
@@ -123,18 +164,20 @@ export const TransactionFormModal: React.FC<TransactionFormModalProps> = ({ isOp
             <ArrowUpRight className="w-4 h-4" />
             収入
           </button>
-          <button
-            type="button"
-            onClick={() => setType('transfer')}
-            className={`flex items-center justify-center gap-1.5 py-2.5 rounded-xl text-sm font-semibold transition ${
-              isTransfer
-                ? 'bg-indigo-500 text-white shadow-md shadow-indigo-500/20'
-                : 'text-slate-600 dark:text-slate-400 hover:bg-slate-200/60 dark:hover:bg-slate-800'
-            }`}
-          >
-            <ArrowLeftRight className="w-4 h-4" />
-            口座振替
-          </button>
+          {!isEditMode && (
+            <button
+              type="button"
+              onClick={() => setType('transfer')}
+              className={`flex items-center justify-center gap-1.5 py-2.5 rounded-xl text-sm font-semibold transition ${
+                isTransfer
+                  ? 'bg-indigo-500 text-white shadow-md shadow-indigo-500/20'
+                  : 'text-slate-600 dark:text-slate-400 hover:bg-slate-200/60 dark:hover:bg-slate-800'
+              }`}
+            >
+              <ArrowLeftRight className="w-4 h-4" />
+              口座振替
+            </button>
+          )}
         </div>
 
         <form onSubmit={handleSubmit} className="p-5 space-y-4">
@@ -273,7 +316,7 @@ export const TransactionFormModal: React.FC<TransactionFormModalProps> = ({ isOp
                   : 'bg-emerald-600 hover:bg-emerald-700 shadow-emerald-600/30'
               }`}
             >
-              {isTransfer ? '振替を記録する' : '登録する'}
+              {isEditMode ? '更新する' : isTransfer ? '振替を記録する' : '登録する'}
             </button>
           </div>
         </form>

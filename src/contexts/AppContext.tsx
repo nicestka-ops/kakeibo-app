@@ -445,10 +445,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   }, [user, supabaseClient, syncStatus]);
 
-  const accountBalances = calculateAccountBalances(accounts, transactions);
+  const categoryNameMap = new Map(categories.map((c) => [c.id, c.name]));
+  const accountBalances = calculateAccountBalances(accounts, transactions, undefined, categoryNameMap);
   const financialSummary = calculateFinancialSummary(accounts, accountBalances);
-  const monthlyCashFlow = calculateMonthlyCashFlow(transactions, selectedYearMonth);
-  const categoryBreakdown = calculateCategoryBreakdown(transactions, selectedYearMonth);
+  const monthlyCashFlow = calculateMonthlyCashFlow(transactions, selectedYearMonth, categoryNameMap);
+  const categoryBreakdown = calculateCategoryBreakdown(transactions, selectedYearMonth, categoryNameMap);
 
   const makeId = () => `tx-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`;
 

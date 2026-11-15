@@ -30,10 +30,22 @@ export interface MonthlyCashFlow {
  * - asOfDate を指定すると、その日付以前の取引のみ対象
  * - transfer は transfer_out（引き落とし）/ transfer_in（入金）の2エントリ方式
  */
+export const CASHFLOW_EXCLUDED_CATEGORY_NAMES = new Set(['両替', '調整', '経費']);
+
+export function isExcludedFromCashFlow(
+  tx: Transaction,
+  categoryNameMap?: Map<string, string>
+): boolean {
+  if (!tx.categoryId || !categoryNameMap) return false;
+  const catName = categoryNameMap.get(tx.categoryId)?.trim();
+  return Boolean(catName && CASHFLOW_EXCLUDED_CATEGORY_NAMES.has(catName));
+}
+
 export function calculateAccountBalances(
   accounts: Account[],
   transactions: Transaction[],
-  asOfDate?: string
+  asOfDate?: string,
+  categoryNameMap?: Map<string, string>
 ): AccountBalanceMap {
   const balances: AccountBalanceMap = {};
 
@@ -104,7 +116,7 @@ export function calculateAccountBalances(
     if (acc.type !== 'credit_card') continue;
     if (acc.autoDebitEnabled === false || !acc.paymentAccountId) continue;
 
-    const billing = calculateCardBillingSummary(acc, transactions, debitReferenceDate);
+    const billing = calculateCardBillingSummary(acc, transactions, debitReferenceDate, categoryNameMap);
     if (billing.debitedTotal > 0) {
       balances[acc.id] = (balances[acc.id] ?? 0) + billing.debitedTotal;
       if (acc.paymentAccountId in balances) {
@@ -163,13 +175,15 @@ export function calculateFinancialSummary(
  */
 export function calculateMonthlyCashFlow(
   transactions: Transaction[],
-  yearMonth: string
+  yearMonth: string,
+  categoryNameMap?: Map<string, string>
 ): MonthlyCashFlow {
   let income = 0;
   let expense = 0;
 
   for (const tx of transactions) {
     if (!tx.date.startsWith(yearMonth)) continue;
+    if (isExcludedFromCashFlow(tx, categoryNameMap)) continue;
     const amount = Math.round(Math.abs(tx.amount));
 
     if (tx.type === 'income') {
@@ -191,12 +205,14 @@ export function calculateMonthlyCashFlow(
  */
 export function calculateCategoryBreakdown(
   transactions: Transaction[],
-  yearMonth: string
+  yearMonth: string,
+  categoryNameMap?: Map<string, string>
 ): Record<string, number> {
   const breakdown: Record<string, number> = {};
 
   for (const tx of transactions) {
     if (!tx.date.startsWith(yearMonth) || tx.type !== 'expense') continue;
+    if (isExcludedFromCashFlow(tx, categoryNameMap)) continue;
     const catId = tx.categoryId || 'uncategorized';
     const amount = Math.round(Math.abs(tx.amount));
     breakdown[catId] = (breakdown[catId] || 0) + amount;
@@ -210,7 +226,8 @@ export function calculateCategoryBreakdown(
  */
 export function generateMonthlyTrend(
   transactions: Transaction[],
-  monthsCount: number = 6
+  monthsCount: number = 6,
+  categoryNameMap?: Map<string, string>
 ): Array<{ month: string; income: number; expense: number; balance: number }> {
   const result: Array<{ month: string; income: number; expense: number; balance: number }> = [];
   const now = new Date();
@@ -218,7 +235,7 @@ export function generateMonthlyTrend(
   for (let i = monthsCount - 1; i >= 0; i--) {
     const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
     const ym = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
-    const flow = calculateMonthlyCashFlow(transactions, ym);
+    const flow = calculateMonthlyCashFlow(transactions, ym, categoryNameMap);
     result.push({
       month: ym,
       income: flow.income,
@@ -242,7 +259,8 @@ export function generateMonthlyTrend(
 export function generateAssetTrend(
   accounts: Account[],
   transactions: Transaction[],
-  monthsCount: number = 6
+  monthsCount: number = 6,
+  categoryNameMap?: Map<string, string>
 ): AssetTrendPoint[] {
   const result: AssetTrendPoint[] = [];
   const now = new Date();
@@ -255,7 +273,7 @@ export function generateAssetTrend(
     const ym = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
 
     // 該当月末時点での残高を計算
-    const balances = calculateAccountBalances(accounts, transactions, asOfDate);
+    const balances = calculateAccountBalances(accounts, transactions, asOfDate, categoryNameMap);
     const summary = calculateFinancialSummary(accounts, balances);
 
     result.push({

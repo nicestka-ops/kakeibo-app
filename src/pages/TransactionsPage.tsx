@@ -2,7 +2,8 @@ import React, { useState } from 'react';
 import { useApp } from '@/contexts/AppContext';
 import { Transaction } from '@/types';
 import { Card } from '@/components/common/Card';
-import { Search, Trash2, ArrowUpRight, ArrowDownRight, ArrowLeftRight, CreditCard, Filter } from 'lucide-react';
+import { TransactionFormModal } from '@/components/forms/TransactionFormModal';
+import { Search, Trash2, Edit2, ArrowUpRight, ArrowDownRight, ArrowLeftRight, CreditCard, Filter } from 'lucide-react';
 
 /** 取引種別の表示設定 */
 const TX_TYPE_CONFIG: Record<
@@ -66,6 +67,7 @@ export const TransactionsPage: React.FC = () => {
   const [filterType, setFilterType] = useState<string>('all');
   const [filterCategory, setFilterCategory] = useState<string>('all');
   const [showFilters, setShowFilters] = useState(false);
+  const [editingTransaction, setEditingTransaction] = useState<Transaction | null>(null);
 
   const categoryMap = new Map(categories.map((c) => [c.id, c]));
   const accountMap = new Map(accounts.map((a) => [a.id, a]));
@@ -235,14 +237,23 @@ export const TransactionsPage: React.FC = () => {
                     </div>
                   </div>
 
-                  <div className="flex items-center gap-3 shrink-0">
+                  <div className="flex items-center gap-2 sm:gap-3 shrink-0">
                     <span className={`font-extrabold text-base ${cfg.colorClass}`}>
                       {cfg.prefix}¥{tx.amount.toLocaleString()}
                     </span>
                     <button
+                      onClick={() => setEditingTransaction(tx)}
+                      className="opacity-70 sm:opacity-0 sm:group-hover:opacity-100 p-1.5 text-slate-400 hover:text-emerald-600 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition"
+                      aria-label="編集"
+                      title="編集"
+                    >
+                      <Edit2 className="w-4 h-4" />
+                    </button>
+                    <button
                       onClick={() => handleDelete(tx)}
-                      className="opacity-0 group-hover:opacity-100 p-1.5 text-slate-400 hover:text-rose-500 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition"
+                      className="opacity-70 sm:opacity-0 sm:group-hover:opacity-100 p-1.5 text-slate-400 hover:text-rose-500 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition"
                       aria-label="削除"
+                      title="削除"
                     >
                       <Trash2 className="w-4 h-4" />
                     </button>
@@ -253,6 +264,12 @@ export const TransactionsPage: React.FC = () => {
           </div>
         )}
       </Card>
+
+      <TransactionFormModal
+        isOpen={Boolean(editingTransaction)}
+        onClose={() => setEditingTransaction(null)}
+        initialTransaction={editingTransaction}
+      />
     </div>
   );
 };

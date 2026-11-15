@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useApp } from '@/contexts/AppContext';
 import { Card } from '@/components/common/Card';
+import { isExcludedFromCashFlow } from '@/services/calculation/balanceEngine';
 import { ChevronLeft, ChevronRight, ArrowUpRight, ArrowDownRight, CalendarDays } from 'lucide-react';
 
 export const CalendarPage: React.FC = () => {
@@ -11,12 +12,14 @@ export const CalendarPage: React.FC = () => {
   const [selectedDay, setSelectedDay] = useState<string>(() => `${selectedYearMonth}-01`);
 
   const categoryMap = new Map(categories.map((c) => [c.id, c]));
+  const categoryNameMap = new Map(categories.map((c) => [c.id, c.name]));
   const firstDayOfWeek = new Date(year, month - 1, 1).getDay();
   const daysInMonth = new Date(year, month, 0).getDate();
 
   const dailySummary: Record<string, { income: number; expense: number }> = {};
   for (const tx of transactions) {
     if (!tx.date.startsWith(selectedYearMonth)) continue;
+    if (isExcludedFromCashFlow(tx, categoryNameMap)) continue;
     if (!dailySummary[tx.date]) dailySummary[tx.date] = { income: 0, expense: 0 };
     if (tx.type === 'income') dailySummary[tx.date].income += tx.amount;
     else if (tx.type === 'expense') dailySummary[tx.date].expense += tx.amount;

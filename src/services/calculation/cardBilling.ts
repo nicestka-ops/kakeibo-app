@@ -66,10 +66,13 @@ export function getPaymentDateForClosing(
   return formatYearMonthDay(payYear, payMonth, paymentDay);
 }
 
+const CARD_EXCLUDED_CATEGORY_NAMES = new Set(['両替', '調整']);
+
 export function calculateCardBillingSummary(
   cardAccount: Account,
   transactions: Transaction[],
-  asOfDate: string = getTodayDateString()
+  asOfDate: string = getTodayDateString(),
+  categoryNameMap?: Map<string, string>
 ): CardBillingSummary {
   const closingDay = cardAccount.closingDay ?? 31;
   const paymentDay = cardAccount.paymentDay ?? 28;
@@ -88,6 +91,10 @@ export function calculateCardBillingSummary(
 
     const amount = Math.round(Math.abs(tx.amount));
     if (tx.type === 'expense') {
+      const catName = tx.categoryId && categoryNameMap ? categoryNameMap.get(tx.categoryId)?.trim() : undefined;
+      if (catName && CARD_EXCLUDED_CATEGORY_NAMES.has(catName)) {
+        continue;
+      }
       const { year, month } = getClosingPeriodForDate(tx.date, closingDay);
       const closingYm = `${year}-${String(month).padStart(2, '0')}`;
       cycleAmounts.set(closingYm, (cycleAmounts.get(closingYm) || 0) + amount);

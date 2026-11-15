@@ -31,8 +31,9 @@ export const AnalyticsPage: React.FC = () => {
     })
     .sort((a, b) => b.value - a.value);
 
-  const cashFlowData = generateMonthlyTrend(transactions, 6);
-  const assetTrendData = generateAssetTrend(accounts, transactions, 6);
+  const categoryNameMap = new Map(categories.map((c) => [c.id, c.name]));
+  const cashFlowData = generateMonthlyTrend(transactions, 6, categoryNameMap);
+  const assetTrendData = generateAssetTrend(accounts, transactions, 6, categoryNameMap);
 
   // Account balance distribution
   const accountData = accounts

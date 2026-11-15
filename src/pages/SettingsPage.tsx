@@ -89,7 +89,9 @@ export const SettingsPage: React.FC = () => {
           paymentMonthOffset: cardMonthOffset,
           autoDebitEnabled: cardAutoDebit,
         },
-        transactions
+        transactions,
+        undefined,
+        new Map(categories.map((c) => [c.id, c.name]))
       )
     : null;
 
