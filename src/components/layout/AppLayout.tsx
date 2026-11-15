@@ -21,7 +21,7 @@ export const AppLayout: React.FC = () => {
       {/* Mobile sidebar overlay */}
       {sidebarOpen && (
         <div
-          className="fixed inset-0 z-40 bg-slate-900/50 md:hidden"
+          className="fixed inset-0 z-40 bg-slate-900/50 lg:hidden"
           onClick={() => setSidebarOpen(false)}
           aria-hidden="true"
         />

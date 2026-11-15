@@ -84,63 +84,14 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
   );
 
   return (
-    <>
-      {/* Mobile/Tablet overlay sidebar */}
-      <aside
-        className={`fixed inset-y-0 left-0 z-50 w-72 bg-white dark:bg-slate-900 border-r border-slate-100 dark:border-slate-800 p-4 transform transition-transform duration-200 ease-in-out lg:static lg:translate-x-0 lg:z-auto ${isOpen ? 'translate-x-0' : '-translate-x-full'}`}
-        aria-label="メインナビゲーション"
-      >
-        <div className="lg:hidden flex items-center justify-between mb-4">
-          <div className="flex items-center gap-3 px-3 py-2">
-            <div className="w-10 h-10 rounded-2xl bg-gradient-to-tr from-emerald-600 to-teal-400 flex items-center justify-center text-white shadow-lg shadow-emerald-500/20">
-              <Wallet className="w-5 h-5" />
-            </div>
-            <div>
-              <h1 className="font-extrabold text-lg text-slate-800 dark:text-slate-100 tracking-tight">
-                kakeibo
-              </h1>
-              <p className="text-xs text-slate-400">家計簿マネージャー</p>
-            </div>
-          </div>
-          <button
-            onClick={onClose}
-            className="p-2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800"
-            aria-label="サイドバーを閉じる"
-          >
-            <X className="w-5 h-5" />
-          </button>
-        </div>
-
-        <nav className="flex-1 space-y-1 overflow-y-auto">
-          {NAV_ITEMS.map((item) => {
-            const Icon = item.icon;
-            return (
-              <NavLink
-                key={item.to}
-                to={item.to}
-                end={item.to === '/'}
-                onClick={onClose}
-                className={({ isActive }) =>
-                  `flex items-center gap-3 px-3.5 py-3 rounded-2xl font-semibold text-sm transition-all duration-150 ${
-                    isActive
-                      ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-400 shadow-sm'
-                      : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100/80 dark:hover:bg-slate-800/60 hover:text-slate-900 dark:hover:text-slate-100'
-                  }`
-                }
-              >
-                <Icon className="w-5 h-5 shrink-0" />
-                <span>{item.label}</span>
-              </NavLink>
-            );
-          })}
-        </nav>
-
-        {renderAuthFooter()}
-      </aside>
-
-      {/* Desktop permanent sidebar */}
-      <aside className="hidden lg:flex lg:flex-col lg:w-64 bg-white dark:bg-slate-900 border-r border-slate-100 dark:border-slate-800 p-4 shrink-0 transition-colors">
-        <div className="flex items-center gap-3 px-3 py-4 mb-4">
+    <aside
+      className={`fixed inset-y-0 left-0 z-50 w-72 lg:static lg:w-64 lg:translate-x-0 lg:z-auto flex flex-col bg-white dark:bg-slate-900 border-r border-slate-100 dark:border-slate-800 p-4 shrink-0 transform transition-transform duration-200 ease-in-out ${
+        isOpen ? 'translate-x-0' : '-translate-x-full'
+      }`}
+      aria-label="メインナビゲーション"
+    >
+      <div className="flex items-center justify-between mb-4">
+        <div className="flex items-center gap-3 px-3 py-2 lg:py-3">
           <div className="w-10 h-10 rounded-2xl bg-gradient-to-tr from-emerald-600 to-teal-400 flex items-center justify-center text-white shadow-lg shadow-emerald-500/20">
             <Wallet className="w-5 h-5" />
           </div>
@@ -151,32 +102,40 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onClose }) => {
             <p className="text-xs text-slate-400">家計簿マネージャー</p>
           </div>
         </div>
+        <button
+          onClick={onClose}
+          className="lg:hidden p-2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800"
+          aria-label="サイドバーを閉じる"
+        >
+          <X className="w-5 h-5" />
+        </button>
+      </div>
 
-        <nav className="flex-1 space-y-1">
-          {NAV_ITEMS.map((item) => {
-            const Icon = item.icon;
-            return (
-              <NavLink
-                key={item.to}
-                to={item.to}
-                end={item.to === '/'}
-                className={({ isActive }) =>
-                  `flex items-center gap-3 px-3.5 py-3 rounded-2xl font-semibold text-sm transition-all duration-150 ${
-                    isActive
-                      ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-400 shadow-sm'
-                      : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100/80 dark:hover:bg-slate-800/60 hover:text-slate-900 dark:hover:text-slate-100'
-                  }`
-                }
-              >
-                <Icon className="w-5 h-5 shrink-0" />
-                <span>{item.label}</span>
-              </NavLink>
-            );
-          })}
-        </nav>
+      <nav className="flex-1 space-y-1 overflow-y-auto">
+        {NAV_ITEMS.map((item) => {
+          const Icon = item.icon;
+          return (
+            <NavLink
+              key={item.to}
+              to={item.to}
+              end={item.to === '/'}
+              onClick={onClose}
+              className={({ isActive }) =>
+                `flex items-center gap-3 px-3.5 py-3 rounded-2xl font-semibold text-sm transition-all duration-150 ${
+                  isActive
+                    ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-400 shadow-sm'
+                    : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100/80 dark:hover:bg-slate-800/60 hover:text-slate-900 dark:hover:text-slate-100'
+                }`
+              }
+            >
+              <Icon className="w-5 h-5 shrink-0" />
+              <span>{item.label}</span>
+            </NavLink>
+          );
+        })}
+      </nav>
 
-        {renderAuthFooter()}
-      </aside>
-    </>
+      {renderAuthFooter()}
+    </aside>
   );
 };

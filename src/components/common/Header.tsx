@@ -43,7 +43,7 @@ export const Header: React.FC<HeaderProps> = ({ onOpenTransactionModal, onToggle
           {/* Mobile sidebar toggle */}
           <button
             onClick={onToggleSidebar}
-            className="md:hidden p-2 text-slate-500 hover:text-slate-800 hover:bg-slate-100 dark:hover:bg-slate-800 dark:text-slate-400 dark:hover:text-slate-100 rounded-lg transition"
+            className="lg:hidden p-2 text-slate-500 hover:text-slate-800 hover:bg-slate-100 dark:hover:bg-slate-800 dark:text-slate-400 dark:hover:text-slate-100 rounded-lg transition"
             aria-label={sidebarOpen ? 'サイドバーを閉じる' : 'メニューを開く'}
           >
             <Menu className="w-5 h-5" />

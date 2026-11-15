@@ -195,6 +195,10 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     for (const [shade, rgb] of Object.entries(preset.shades)) {
       root.style.setProperty(`--accent-${shade}`, rgb);
     }
+    const themeColorMeta = document.querySelector('meta[name="theme-color"]');
+    if (themeColorMeta) {
+      themeColorMeta.setAttribute('content', preset.swatchHex);
+    }
     localStorage.setItem('kakeibo_accent_color', accentColor);
   }, [accentColor]);
 

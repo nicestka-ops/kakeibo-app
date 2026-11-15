@@ -121,22 +121,22 @@ export const HomePage: React.FC = () => {
             </Link>
           }
         >
-          <div className="grid grid-cols-3 gap-3 sm:gap-4 text-center py-1">
-            <div className="p-3 bg-slate-50 dark:bg-slate-800/60 rounded-xl">
-              <span className="text-xs text-slate-500 dark:text-slate-400">総資産</span>
-              <p className="text-base sm:text-lg font-bold text-slate-800 dark:text-slate-100 mt-1">
+          <div className="grid grid-cols-3 gap-2 sm:gap-3 text-center py-1">
+            <div className="p-2.5 sm:p-3 bg-slate-50 dark:bg-slate-800/60 rounded-xl flex flex-col items-center justify-center min-w-0">
+              <span className="text-[11px] sm:text-xs text-slate-500 dark:text-slate-400 whitespace-nowrap">総資産</span>
+              <p className="text-xs sm:text-sm md:text-base lg:text-lg font-bold text-slate-800 dark:text-slate-100 mt-1 whitespace-nowrap">
                 ¥{financialSummary.totalAssets.toLocaleString()}
               </p>
             </div>
-            <div className="p-3 bg-slate-50 dark:bg-slate-800/60 rounded-xl">
-              <span className="text-xs text-slate-500 dark:text-slate-400">負債</span>
-              <p className="text-base sm:text-lg font-bold text-rose-500 mt-1">
+            <div className="p-2.5 sm:p-3 bg-slate-50 dark:bg-slate-800/60 rounded-xl flex flex-col items-center justify-center min-w-0">
+              <span className="text-[11px] sm:text-xs text-slate-500 dark:text-slate-400 whitespace-nowrap">負債</span>
+              <p className="text-xs sm:text-sm md:text-base lg:text-lg font-bold text-rose-500 mt-1 whitespace-nowrap">
                 -¥{financialSummary.totalLiabilities.toLocaleString()}
               </p>
             </div>
-            <div className="p-3 bg-slate-50 dark:bg-slate-800/60 rounded-xl">
-              <span className="text-xs text-slate-500 dark:text-slate-400 font-bold">純資産</span>
-              <p className="text-base sm:text-lg font-extrabold text-emerald-600 dark:text-emerald-400 mt-1">
+            <div className="p-2.5 sm:p-3 bg-slate-50 dark:bg-slate-800/60 rounded-xl flex flex-col items-center justify-center min-w-0">
+              <span className="text-[11px] sm:text-xs text-slate-500 dark:text-slate-400 font-bold whitespace-nowrap">純資産</span>
+              <p className="text-xs sm:text-sm md:text-base lg:text-lg font-extrabold text-emerald-600 dark:text-emerald-400 mt-1 whitespace-nowrap">
                 ¥{financialSummary.netAssets.toLocaleString()}
               </p>
             </div>
