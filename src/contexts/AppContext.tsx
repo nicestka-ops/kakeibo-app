@@ -55,6 +55,11 @@ interface AppContextType {
   deletePlannedExpense: (id: string) => void;
   addSavingsGoal: (goal: Omit<SavingsGoal, 'id'>) => void;
   updateSavingsGoal: (id: string, goal: Partial<SavingsGoal>) => void;
+  importTransactionsBatch: (
+    newTransactions: Transaction[],
+    newAccounts?: Account[],
+    newCategories?: Category[]
+  ) => void;
   resetToDefaultData: () => void;
 }
 
@@ -202,6 +207,22 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     );
   };
 
+  const importTransactionsBatch = (
+    newTransactions: Transaction[],
+    newAccounts: Account[] = [],
+    newCategories: Category[] = []
+  ) => {
+    if (newAccounts.length > 0) {
+      setAccounts((prev) => [...prev, ...newAccounts]);
+    }
+    if (newCategories.length > 0) {
+      setCategories((prev) => [...prev, ...newCategories]);
+    }
+    if (newTransactions.length > 0) {
+      setTransactions((prev) => [...newTransactions, ...prev]);
+    }
+  };
+
   const resetToDefaultData = () => {
     setAccounts(DEFAULT_ACCOUNTS);
     setTransactions(DEFAULT_TRANSACTIONS);
@@ -237,6 +258,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         deletePlannedExpense,
         addSavingsGoal,
         updateSavingsGoal,
+        importTransactionsBatch,
         resetToDefaultData,
       }}
     >

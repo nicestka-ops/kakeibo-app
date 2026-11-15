@@ -7,7 +7,7 @@ import { exportTransactionsCSV, importTransactionsCSV } from '@/services/migrati
 import { Moon, Sun, Monitor, Download, Upload, RefreshCw, ShieldCheck, Database, Palette, Bell, Key, Trash2, LogIn, LogOut, User as UserIcon } from 'lucide-react';
 
 export const SettingsPage: React.FC = () => {
-  const { transactions, accounts, categories, resetToDefaultData, addTransaction } = useApp();
+  const { transactions, accounts, categories, resetToDefaultData, importTransactionsBatch } = useApp();
   const {
     user,
     loading: authLoading,
@@ -64,17 +64,27 @@ export const SettingsPage: React.FC = () => {
 
       const result = importTransactionsCSV(text, accReverseMap, catReverseMap);
       if (result.success && result.data.length > 0) {
-        let count = 0;
-        for (const item of result.data) {
-          addTransaction(item);
-          count++;
+        importTransactionsBatch(result.data, result.createdAccounts, result.createdCategories);
+        const notes: string[] = [];
+        if (result.createdAccounts && result.createdAccounts.length > 0) {
+          notes.push(`決済手段 ${result.createdAccounts.length} 件を自動追加しました`);
         }
-        alert(`${count} 件の取引データを正常にインポートしました。`);
+        if (result.createdCategories && result.createdCategories.length > 0) {
+          notes.push(`カテゴリー ${result.createdCategories.length} 件を自動追加しました`);
+        }
+        if (result.errors.length > 0) {
+          notes.push(`スキップ/警告 ${result.errors.length} 件:\n${result.errors.slice(0, 5).join('\n')}`);
+        }
+        alert(
+          `${result.data.length} 件の取引データを正常にインポートしました。` +
+            (notes.length > 0 ? `\n\n${notes.join('\n')}` : '')
+        );
       } else {
         alert(`インポートに失敗しました:\n${result.errors.join('\n')}`);
       }
     };
     reader.readAsText(file, 'utf-8');
+    e.target.value = '';
   };
 
   const handleReset = () => {
