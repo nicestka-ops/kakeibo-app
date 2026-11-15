@@ -9,6 +9,12 @@ export interface Account {
   includeInAssets: boolean;
   sortOrder: number;
   isActive: boolean;
+  /** クレジットカード設定 (type === 'credit_card') */
+  paymentAccountId?: string;
+  closingDay?: number;         // 1-28, 31=末日 (デフォルト 31)
+  paymentDay?: number;         // 1-28, 31=末日 (デフォルト 28)
+  paymentMonthOffset?: number; // 0=当月, 1=翌月, 2=翌々月 (デフォルト 1)
+  autoDebitEnabled?: boolean;  // 自動引き落とし計算 (デフォルト true)
   createdAt?: string;
   updatedAt?: string;
 }

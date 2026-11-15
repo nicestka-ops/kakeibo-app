@@ -331,12 +331,28 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     let cardId: string;
     let nextAccounts = [...current.accounts];
 
+    const paypayBankId = paypayAccounts[0].id;
+
     if (existingCard) {
       cardId = existingCard.id;
-      if (existingCard.type !== 'credit_card' || existingCard.includeInAssets !== false) {
+      if (
+        existingCard.type !== 'credit_card' ||
+        existingCard.includeInAssets !== false ||
+        !existingCard.paymentAccountId
+      ) {
         nextAccounts = nextAccounts.map((a) =>
           a.id === cardId
-            ? { ...a, type: 'credit_card', includeInAssets: false, updatedAt: nowIso }
+            ? {
+                ...a,
+                type: 'credit_card',
+                includeInAssets: false,
+                paymentAccountId: a.paymentAccountId || paypayBankId,
+                closingDay: a.closingDay ?? 31,
+                paymentDay: a.paymentDay ?? 28,
+                paymentMonthOffset: a.paymentMonthOffset ?? 1,
+                autoDebitEnabled: a.autoDebitEnabled ?? true,
+                updatedAt: nowIso,
+              }
             : a
         );
       }
@@ -353,6 +369,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         openingBalance: 0,
         openingBalanceDate: earliestDate,
         includeInAssets: false,
+        paymentAccountId: paypayBankId,
+        closingDay: 31,
+        paymentDay: 28,
+        paymentMonthOffset: 1,
+        autoDebitEnabled: true,
         sortOrder: nextAccounts.length + 1,
         isActive: true,
         createdAt: nowIso,
@@ -383,6 +404,46 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       localStorage.setItem(migrationKey, 'done');
     }
   }, [user, supabaseClient, syncStatus, migratePayPayExpensesToMastercard]);
+
+  // 既存のクレジットカード口座に引き落とし設定が未設定の場合、デフォルト設定を補完（1回のみ）
+  useEffect(() => {
+    const billingMigrationKey = 'kakeibo_migrated_card_billing_v1';
+    if (localStorage.getItem(billingMigrationKey) === 'done') return;
+    if (user && supabaseClient && syncStatus !== 'synced') return;
+
+    const current = latestPayloadRef.current;
+    const paypayBank = current.accounts.find((a) => a.name.trim() === 'PayPay銀行');
+    const cardsNeedingDefaults = current.accounts.filter(
+      (a) =>
+        a.type === 'credit_card' &&
+        (a.closingDay === undefined ||
+          a.paymentDay === undefined ||
+          a.paymentMonthOffset === undefined ||
+          (paypayBank && !a.paymentAccountId && a.autoDebitEnabled === undefined))
+    );
+
+    if (cardsNeedingDefaults.length > 0) {
+      const nowIso = new Date().toISOString();
+      setAccounts((prev) =>
+        prev.map((a) => {
+          if (a.type !== 'credit_card') return a;
+          return {
+            ...a,
+            paymentAccountId: a.paymentAccountId || paypayBank?.id,
+            closingDay: a.closingDay ?? 31,
+            paymentDay: a.paymentDay ?? 28,
+            paymentMonthOffset: a.paymentMonthOffset ?? 1,
+            autoDebitEnabled: a.autoDebitEnabled ?? true,
+            updatedAt: nowIso,
+          };
+        })
+      );
+    }
+
+    if (syncStatus === 'synced' || !user) {
+      localStorage.setItem(billingMigrationKey, 'done');
+    }
+  }, [user, supabaseClient, syncStatus]);
 
   const accountBalances = calculateAccountBalances(accounts, transactions);
   const financialSummary = calculateFinancialSummary(accounts, accountBalances);

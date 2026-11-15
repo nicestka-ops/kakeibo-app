@@ -1,11 +1,12 @@
-import React, { useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useApp } from '@/contexts/AppContext';
 import { useAuth } from '@/contexts/AuthContext';
-import { useTheme } from '@/contexts/ThemeContext';
+import { ACCENT_COLOR_PRESETS, useTheme } from '@/contexts/ThemeContext';
 import { Card } from '@/components/common/Card';
 import { exportTransactionsCSV, importTransactionsCSV } from '@/services/migration/csvImporter';
+import { calculateCardBillingSummary } from '@/services/calculation/cardBilling';
 import { SYNC_SETUP_SQL } from '@/services/sync/cloudSync';
-import { Moon, Sun, Monitor, Download, Upload, RefreshCw, ShieldCheck, Database, Palette, Bell, Key, Trash2, LogIn, LogOut, User as UserIcon, Cloud, CloudOff } from 'lucide-react';
+import { Moon, Sun, Monitor, Download, Upload, RefreshCw, ShieldCheck, Database, Palette, Bell, Key, Trash2, LogIn, LogOut, User as UserIcon, Cloud, CloudOff, CreditCard, Check } from 'lucide-react';
 
 export const SettingsPage: React.FC = () => {
   const {
@@ -14,6 +15,7 @@ export const SettingsPage: React.FC = () => {
     categories,
     resetToDefaultData,
     importTransactionsBatch,
+    updateAccount,
     syncStatus,
     lastSyncedAt,
     syncError,
@@ -34,11 +36,62 @@ export const SettingsPage: React.FC = () => {
     resetSupabaseConfig,
     clearAuthError,
   } = useAuth();
-  const { theme, setTheme } = useTheme();
+  const { theme, setTheme, accentColor, setAccentColor } = useTheme();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [showDangerZone, setShowDangerZone] = useState(false);
   const [supabaseUrlInput, setSupabaseUrlInput] = useState(configuredUrl || '');
   const [supabaseAnonKeyInput, setSupabaseAnonKeyInput] = useState('');
+
+  const creditCards = accounts.filter((a) => a.type === 'credit_card' && a.isActive);
+  const paymentSourceAccounts = accounts.filter((a) => a.type !== 'credit_card' && a.isActive);
+  const [selectedCardId, setSelectedCardId] = useState<string>('');
+  const [cardPaymentAccountId, setCardPaymentAccountId] = useState<string>('');
+  const [cardClosingDay, setCardClosingDay] = useState<number>(31);
+  const [cardPaymentDay, setCardPaymentDay] = useState<number>(28);
+  const [cardMonthOffset, setCardMonthOffset] = useState<number>(1);
+  const [cardAutoDebit, setCardAutoDebit] = useState<boolean>(true);
+  const [cardSavedToast, setCardSavedToast] = useState<boolean>(false);
+
+  const activeCard =
+    creditCards.find((c) => c.id === selectedCardId) || creditCards[0] || null;
+
+  useEffect(() => {
+    if (!activeCard) return;
+    setSelectedCardId(activeCard.id);
+    setCardPaymentAccountId(activeCard.paymentAccountId || '');
+    setCardClosingDay(activeCard.closingDay ?? 31);
+    setCardPaymentDay(activeCard.paymentDay ?? 28);
+    setCardMonthOffset(activeCard.paymentMonthOffset ?? 1);
+    setCardAutoDebit(activeCard.autoDebitEnabled ?? true);
+  }, [activeCard?.id]);
+
+  const handleSaveCardBillingSettings = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!activeCard) return;
+    updateAccount(activeCard.id, {
+      paymentAccountId: cardPaymentAccountId || undefined,
+      closingDay: cardClosingDay,
+      paymentDay: cardPaymentDay,
+      paymentMonthOffset: cardMonthOffset,
+      autoDebitEnabled: cardAutoDebit,
+    });
+    setCardSavedToast(true);
+    window.setTimeout(() => setCardSavedToast(false), 2500);
+  };
+
+  const cardBillingPreview = activeCard
+    ? calculateCardBillingSummary(
+        {
+          ...activeCard,
+          paymentAccountId: cardPaymentAccountId || undefined,
+          closingDay: cardClosingDay,
+          paymentDay: cardPaymentDay,
+          paymentMonthOffset: cardMonthOffset,
+          autoDebitEnabled: cardAutoDebit,
+        },
+        transactions
+      )
+    : null;
 
   const handleSaveSupabaseConfig = (e: React.FormEvent) => {
     e.preventDefault();
@@ -119,8 +172,8 @@ export const SettingsPage: React.FC = () => {
   return (
     <div className="space-y-5 animate-fadeIn max-w-4xl px-1 sm:px-0">
       {/* Appearance Settings */}
-      <Card title="外観設定">
-        <p className="text-xs text-slate-400 mb-4">画面のカラーテーマを選択できます</p>
+      <Card title="外観・テーマカラー設定">
+        <p className="text-xs text-slate-400 mb-4">画面のカラーモードとテーマカラーを選択できます</p>
         <div className="grid grid-cols-3 gap-3">
           <button
             onClick={() => setTheme('light')}
@@ -158,6 +211,223 @@ export const SettingsPage: React.FC = () => {
             <span className="text-xs font-bold">端末に合わせる</span>
           </button>
         </div>
+
+        <div className="mt-5 pt-4 border-t border-slate-100 dark:border-slate-800">
+          <div className="flex items-center gap-2 mb-3">
+            <Palette className="w-4 h-4 text-emerald-500" />
+            <span className="text-xs font-bold text-slate-700 dark:text-slate-200">テーマカラー</span>
+          </div>
+          <div className="grid grid-cols-4 sm:grid-cols-7 gap-2">
+            {ACCENT_COLOR_PRESETS.map((preset) => {
+              const selected = accentColor === preset.id;
+              return (
+                <button
+                  key={preset.id}
+                  type="button"
+                  onClick={() => setAccentColor(preset.id)}
+                  className={`p-2 rounded-xl border text-center transition flex flex-col items-center gap-1.5 ${
+                    selected
+                      ? 'border-emerald-500 bg-emerald-50/50 dark:bg-emerald-950/40 ring-2 ring-emerald-500/20'
+                      : 'border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800/50'
+                  }`}
+                >
+                  <span
+                    className="w-6 h-6 rounded-full flex items-center justify-center text-white shadow-sm"
+                    style={{ backgroundColor: preset.swatchHex }}
+                  >
+                    {selected && <Check className="w-3.5 h-3.5" />}
+                  </span>
+                  <span className="text-[11px] font-bold text-slate-700 dark:text-slate-300">
+                    {preset.label}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      </Card>
+
+      {/* Credit Card Billing Settings */}
+      <Card title="クレジットカード引き落とし設定">
+        <p className="text-xs text-slate-400 mb-4">
+          締め日・引き落とし日・引き落とし先口座を設定します。引き落とし日前の利用分（先月分＋今月分）を未払いとして自動計算し、引き落とし日以降は自動で引き落とし先口座から減算します。
+        </p>
+
+        {creditCards.length === 0 ? (
+          <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-100 dark:border-slate-800 text-xs text-slate-500 dark:text-slate-400">
+            クレジットカード種別の口座がまだありません。「口座管理」からクレジットカード口座を追加するか、CSVインポート後に設定できます。
+          </div>
+        ) : (
+          <form onSubmit={handleSaveCardBillingSettings} className="space-y-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <label className="block text-xs font-bold text-slate-600 dark:text-slate-300 mb-1.5">
+                  対象クレジットカード
+                </label>
+                <div className="relative">
+                  <select
+                    value={activeCard?.id || ''}
+                    onChange={(e) => setSelectedCardId(e.target.value)}
+                    className="w-full px-3 py-2.5 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-sm font-medium text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-emerald-500/40"
+                  >
+                    {creditCards.map((card) => (
+                      <option key={card.id} value={card.id}>
+                        {card.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-600 dark:text-slate-300 mb-1.5">
+                  引き落とし先口座
+                </label>
+                <select
+                  value={cardPaymentAccountId}
+                  onChange={(e) => setCardPaymentAccountId(e.target.value)}
+                  className="w-full px-3 py-2.5 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-sm font-medium text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-emerald-500/40"
+                >
+                  <option value="">（未設定 / 自動引き落とししない）</option>
+                  {paymentSourceAccounts.map((acc) => (
+                    <option key={acc.id} value={acc.id}>
+                      {acc.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <div>
+                <label className="block text-xs font-bold text-slate-600 dark:text-slate-300 mb-1.5">
+                  締め日
+                </label>
+                <select
+                  value={cardClosingDay}
+                  onChange={(e) => setCardClosingDay(Number(e.target.value))}
+                  className="w-full px-3 py-2.5 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-sm font-medium text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-emerald-500/40"
+                >
+                  <option value={31}>末日（1日〜末日利用）</option>
+                  {Array.from({ length: 28 }, (_, i) => i + 1).map((d) => (
+                    <option key={d} value={d}>
+                      毎月 {d} 日締め
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-600 dark:text-slate-300 mb-1.5">
+                  引き落とし月
+                </label>
+                <select
+                  value={cardMonthOffset}
+                  onChange={(e) => setCardMonthOffset(Number(e.target.value))}
+                  className="w-full px-3 py-2.5 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-sm font-medium text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-emerald-500/40"
+                >
+                  <option value={0}>当月</option>
+                  <option value={1}>翌月</option>
+                  <option value={2}>翌々月</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-600 dark:text-slate-300 mb-1.5">
+                  引き落とし日
+                </label>
+                <select
+                  value={cardPaymentDay}
+                  onChange={(e) => setCardPaymentDay(Number(e.target.value))}
+                  className="w-full px-3 py-2.5 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-sm font-medium text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-emerald-500/40"
+                >
+                  {Array.from({ length: 28 }, (_, i) => i + 1).map((d) => (
+                    <option key={d} value={d}>
+                      毎月 {d} 日
+                    </option>
+                  ))}
+                  <option value={31}>末日</option>
+                </select>
+              </div>
+            </div>
+
+            <div className="flex items-center justify-between p-3 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-100 dark:border-slate-800">
+              <div className="flex items-center gap-2.5">
+                <CreditCard className="w-4 h-4 text-emerald-500" />
+                <div>
+                  <div className="text-xs font-bold text-slate-700 dark:text-slate-200">
+                    引き落とし日の自動反映を有効にする
+                  </div>
+                  <div className="text-[11px] text-slate-400">
+                    引き落とし日を過ぎた締め分を自動で銀行残高から引き落とします
+                  </div>
+                </div>
+              </div>
+              <input
+                type="checkbox"
+                checked={cardAutoDebit}
+                onChange={(e) => setCardAutoDebit(e.target.checked)}
+                className="w-4 h-4 accent-emerald-600 rounded"
+              />
+            </div>
+
+            {cardBillingPreview && (
+              <div className="p-3.5 rounded-2xl bg-emerald-50/60 dark:bg-emerald-950/20 border border-emerald-200/70 dark:border-emerald-900/50 space-y-2">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <span className="text-xs font-bold text-emerald-800 dark:text-emerald-300">
+                    未払い残高（引き落とし前合計）
+                  </span>
+                  <span className="text-base font-extrabold text-emerald-700 dark:text-emerald-300">
+                    ¥{cardBillingPreview.unpaidTotal.toLocaleString()}
+                  </span>
+                </div>
+                {cardBillingPreview.nextDebitDate ? (
+                  <div className="text-xs text-slate-600 dark:text-slate-300 flex flex-wrap items-center justify-between gap-2">
+                    <span>
+                      次回引き落とし予定（{cardBillingPreview.nextDebitDate}）
+                    </span>
+                    <span className="font-bold">
+                      ¥{cardBillingPreview.nextDebitAmount.toLocaleString()}
+                    </span>
+                  </div>
+                ) : (
+                  <div className="text-xs text-slate-500 dark:text-slate-400">
+                    現在未払いの引き落とし予定はありません
+                  </div>
+                )}
+                {cardBillingPreview.unpaidCycles.length > 0 && (
+                  <div className="pt-1.5 border-t border-emerald-200/50 dark:border-emerald-900/40 space-y-1">
+                    {cardBillingPreview.unpaidCycles.map((c) => (
+                      <div
+                        key={c.closingYm}
+                        className="flex items-center justify-between text-[11px] text-slate-600 dark:text-slate-400"
+                      >
+                        <span>
+                          {c.closingYm} 利用分 → {c.debitDate} 引き落とし予定
+                        </span>
+                        <span className="font-semibold">¥{c.amount.toLocaleString()}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+
+            <div className="flex items-center justify-end gap-3">
+              {cardSavedToast && (
+                <span className="text-xs font-bold text-emerald-600 dark:text-emerald-400">
+                  設定を保存しました
+                </span>
+              )}
+              <button
+                type="submit"
+                className="px-4 py-2 text-xs font-bold bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl shadow-sm transition"
+              >
+                引き落とし設定を保存
+              </button>
+            </div>
+          </form>
+        )}
       </Card>
 
       {/* Cloud Sync */}

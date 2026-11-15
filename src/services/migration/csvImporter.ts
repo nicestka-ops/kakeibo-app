@@ -172,6 +172,8 @@ export function importTransactionsCSV(
       if (!accountId) {
         accountId = `acc-imp-${Date.now()}-${createdAccounts.length + 1}-${Math.random().toString(36).slice(2, 6)}`;
         const accType = inferAccountType(effectiveAccountName);
+        const payPayBankId =
+          accType === 'credit_card' ? localAccountMap.get('PayPay銀行') : undefined;
         const newAcc: Account = {
           id: accountId,
           name: effectiveAccountName,
@@ -179,6 +181,15 @@ export function importTransactionsCSV(
           openingBalance: 0,
           openingBalanceDate: date,
           includeInAssets: accType !== 'credit_card',
+          ...(accType === 'credit_card'
+            ? {
+                paymentAccountId: payPayBankId,
+                closingDay: 31,
+                paymentDay: 28,
+                paymentMonthOffset: 1,
+                autoDebitEnabled: true,
+              }
+            : {}),
           sortOrder: localAccountMap.size + 1,
           isActive: true,
           createdAt: nowIso,

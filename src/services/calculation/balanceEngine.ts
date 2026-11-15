@@ -1,4 +1,5 @@
 import { Account, Transaction } from '@/types';
+import { calculateCardBillingSummary, getTodayDateString } from './cardBilling';
 
 export interface AccountBalanceMap {
   [accountId: string]: number;
@@ -94,6 +95,21 @@ export function calculateAccountBalances(
 
       default:
         balances[tx.accountId] -= amount;
+    }
+  }
+
+  // クレジットカードの自動引き落とし反映（引き落とし日到来分をカード負債から減らし、引き落とし先口座から減算）
+  const debitReferenceDate = asOfDate || getTodayDateString();
+  for (const acc of accounts) {
+    if (acc.type !== 'credit_card') continue;
+    if (acc.autoDebitEnabled === false || !acc.paymentAccountId) continue;
+
+    const billing = calculateCardBillingSummary(acc, transactions, debitReferenceDate);
+    if (billing.debitedTotal > 0) {
+      balances[acc.id] = (balances[acc.id] ?? 0) + billing.debitedTotal;
+      if (acc.paymentAccountId in balances) {
+        balances[acc.paymentAccountId] -= billing.debitedTotal;
+      }
     }
   }
 
