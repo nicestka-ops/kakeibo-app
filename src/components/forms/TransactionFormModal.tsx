@@ -1,7 +1,8 @@
 import React, { useEffect, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { useApp } from '@/contexts/AppContext';
 import { Transaction, TransactionType } from '@/types';
-import { X, Delete, Check } from 'lucide-react';
+import { X, Delete, Check, Trash2 } from 'lucide-react';
 
 interface TransactionFormModalProps {
   isOpen: boolean;
@@ -16,7 +17,7 @@ export const TransactionFormModal: React.FC<TransactionFormModalProps> = ({
   initialTransaction = null,
   initialType = 'expense',
 }) => {
-  const { accounts, categories, addTransaction, updateTransaction, addTransfer, selectedYearMonth } = useApp();
+  const { accounts, categories, addTransaction, updateTransaction, deleteTransaction, addTransfer, selectedYearMonth } = useApp();
   const isEditMode = Boolean(initialTransaction);
 
   const [type, setType] = useState<TransactionType>(initialType);
@@ -155,7 +156,7 @@ export const TransactionFormModal: React.FC<TransactionFormModalProps> = ({
 
   const formattedAmount = Number(amountStr || '0').toLocaleString();
 
-  return (
+  return createPortal(
     <div
       className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-slate-900/50 backdrop-blur-sm animate-fadeIn p-0 sm:p-4"
       onClick={onClose}
@@ -361,15 +362,33 @@ export const TransactionFormModal: React.FC<TransactionFormModalProps> = ({
             />
           </div>
 
-          <button
-            type="submit"
-            className="w-full py-3.5 rounded-2xl bg-primary-600 hover:bg-primary-700 active:scale-[0.99] text-white font-bold text-sm shadow-lg shadow-primary-500/25 flex items-center justify-center gap-2 transition"
-          >
-            <Check className="w-4 h-4" />
-            <span>{isEditMode ? '更新する' : '登録する'}</span>
-          </button>
+          <div className="flex items-center gap-2 pt-1">
+            {isEditMode && initialTransaction && (
+              <button
+                type="button"
+                onClick={() => {
+                  if (confirm('この取引を削除しますか？')) {
+                    deleteTransaction(initialTransaction.id);
+                    onClose();
+                  }
+                }}
+                className="px-4 py-3.5 rounded-2xl bg-rose-50 dark:bg-rose-950/50 text-rose-600 dark:text-rose-400 font-bold text-sm flex items-center justify-center gap-1.5 hover:bg-rose-100 transition shrink-0"
+              >
+                <Trash2 className="w-4 h-4" />
+                <span>削除</span>
+              </button>
+            )}
+            <button
+              type="submit"
+              className="flex-1 py-3.5 rounded-2xl bg-primary-600 hover:bg-primary-700 active:scale-[0.99] text-white font-bold text-sm shadow-lg shadow-primary-500/25 flex items-center justify-center gap-2 transition"
+            >
+              <Check className="w-4 h-4" />
+              <span>{isEditMode ? '更新する' : '登録する'}</span>
+            </button>
+          </div>
         </form>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 };

@@ -71,14 +71,11 @@ export const AppLayout: React.FC = () => {
       <Sidebar isOpen={sidebarOpen} onClose={() => setSidebarOpen(false)} />
 
       <div className="flex-1 flex flex-col min-w-0 min-h-screen">
-        {/* Desktop Header */}
-        <div className="hidden md:block">
-          <Header
-            onOpenTransactionModal={() => setIsRegisterSheetOpen(true)}
-            onToggleSidebar={() => setSidebarOpen(!sidebarOpen)}
-            sidebarOpen={sidebarOpen}
-          />
-        </div>
+        <Header
+          onOpenTransactionModal={() => setIsRegisterSheetOpen(true)}
+          onToggleSidebar={() => setSidebarOpen(!sidebarOpen)}
+          sidebarOpen={sidebarOpen}
+        />
 
         <main className="flex-1 px-4 sm:px-6 lg:px-8 pt-3 md:pt-5 pb-24 md:pb-10">
           <div className="max-w-3xl lg:max-w-5xl mx-auto w-full">

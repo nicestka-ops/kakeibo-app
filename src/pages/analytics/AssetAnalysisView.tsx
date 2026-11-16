@@ -1,8 +1,8 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useState } from 'react';
 import { useApp } from '@/contexts/AppContext';
 import { useTheme } from '@/contexts/ThemeContext';
 import { SubPageHeader } from '@/components/common/SubPageHeader';
-import { generateAssetTrend } from '@/services/calculation/balanceEngine';
+import { calculateMonthlyCashFlow } from '@/services/calculation/balanceEngine';
 import {
   calculateLinkedCardBillingForBank,
   getMonthlyPlannedExpenses,
@@ -48,6 +48,7 @@ export const AssetAnalysisView: React.FC = () => {
     setSelectedYearMonth,
   } = useApp();
   const { customColors } = useTheme();
+  const [trendRange, setTrendRange] = useState<3 | 6 | 9>(6);
 
   const categoryNameMap = useMemo(() => new Map(categories.map((c) => [c.id, c.name])), [categories]);
   const todayStr = getTodayDateString();
@@ -117,14 +118,37 @@ export const AssetAnalysisView: React.FC = () => {
     });
   }, [assetAccounts, transactions, selectedYearMonth]);
 
-  const assetTrend = useMemo(
-    () =>
-      generateAssetTrend(accounts, transactions, 6, categoryNameMap).map((p) => ({
-        ...p,
-        label: `${parseInt(p.month.slice(5), 10)}月`,
-      })),
-    [accounts, transactions, categoryNameMap]
-  );
+  // 現在の確定総資産から月次収支を逆算して推移を算出（過去の「調整」によるズレを防止）
+  const assetTrend = useMemo(() => {
+    const months: string[] = [];
+    let cur = selectedYearMonth;
+    for (let i = 0; i < trendRange; i++) {
+      months.unshift(cur);
+      cur = getPreviousYearMonth(cur);
+    }
+
+    const points: Array<{
+      month: string;
+      label: string;
+      totalAssets: number;
+      netAssets: number;
+    }> = new Array(months.length);
+
+    let runningTotal = totalAssets;
+    for (let i = months.length - 1; i >= 0; i--) {
+      const ym = months[i];
+      const liability = i === months.length - 1 ? unpaidLiabilities : 0;
+      points[i] = {
+        month: ym,
+        label: `${parseInt(ym.slice(5), 10)}月`,
+        totalAssets: runningTotal,
+        netAssets: runningTotal - liability,
+      };
+      const flow = calculateMonthlyCashFlow(transactions, ym, categoryNameMap);
+      runningTotal -= flow.netSavings;
+    }
+    return points;
+  }, [selectedYearMonth, trendRange, totalAssets, unpaidLiabilities, transactions, categoryNameMap]);
 
   return (
     <div className="space-y-4 animate-fadeIn">
@@ -258,9 +282,32 @@ export const AssetAnalysisView: React.FC = () => {
 
       {/* 総資産の推移 */}
       <div className="rounded-3xl p-5 bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 shadow-sm space-y-3">
-        <h2 className="text-sm font-extrabold text-slate-900 dark:text-slate-50">
-          総資産の推移
-        </h2>
+        <div className="flex items-center justify-between gap-2">
+          <div>
+            <h2 className="text-sm font-extrabold text-slate-900 dark:text-slate-50">
+              総資産の推移
+            </h2>
+            <p className="text-[10px] text-slate-400">
+              現在の確定残高から月次収支で逆算（調整によるズレを補正）
+            </p>
+          </div>
+          <div className="inline-flex p-0.5 rounded-full bg-slate-100 dark:bg-slate-800">
+            {([3, 6, 9] as const).map((n) => (
+              <button
+                key={n}
+                type="button"
+                onClick={() => setTrendRange(n)}
+                className={`px-2.5 py-1 rounded-full text-[10px] font-bold transition ${
+                  trendRange === n
+                    ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-sm'
+                    : 'text-slate-500'
+                }`}
+              >
+                {n}ヶ月
+              </button>
+            ))}
+          </div>
+        </div>
         <div className="h-48">
           <ResponsiveContainer width="100%" height="100%">
             <ComposedChart data={assetTrend} margin={{ top: 5, right: 5, left: -18, bottom: 0 }}>
