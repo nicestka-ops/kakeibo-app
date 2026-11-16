@@ -1,4 +1,4 @@
-import React, { useLayoutEffect, useMemo, useRef, useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useApp } from '@/contexts/AppContext';
 import { useTheme } from '@/contexts/ThemeContext';
@@ -53,10 +53,8 @@ export const HomePage: React.FC = () => {
   } = useApp();
   const { customColors } = useTheme();
 
-  // 2カード（「今月の収支」「先月対決」）の上下入れ替え状態
-  const [heroOrder, setHeroOrder] = useState<HeroCardId[]>(['summary', 'battle']);
-  const heroRefs = useRef<Record<string, HTMLDivElement | null>>({});
-  const prevTopsRef = useRef<Record<string, number>>({});
+  // 2カード（「今月の収支」「先月対決」）を8〜9割重ねて上下入れ替え
+  const [activeHero, setActiveHero] = useState<HeroCardId>('summary');
 
   const [battleMetric, setBattleMetric] = useState<'expense' | 'net'>('expense');
   const [summaryTab, setSummaryTab] = useState<'actual' | 'forecast'>('actual');
@@ -64,39 +62,8 @@ export const HomePage: React.FC = () => {
   const [isForecastExpanded, setIsForecastExpanded] = useState(false);
   const [isCardPaymentExpanded, setIsCardPaymentExpanded] = useState(false);
 
-  const captureHeroPositions = () => {
-    const tops: Record<string, number> = {};
-    for (const id of heroOrder) {
-      const el = heroRefs.current[id];
-      if (el) tops[id] = el.getBoundingClientRect().top;
-    }
-    prevTopsRef.current = tops;
-  };
-
-  useLayoutEffect(() => {
-    const prevTops = prevTopsRef.current;
-    if (Object.keys(prevTops).length === 0) return;
-
-    for (const id of heroOrder) {
-      const el = heroRefs.current[id];
-      const oldTop = prevTops[id];
-      if (!el || oldTop === undefined) continue;
-      const newTop = el.getBoundingClientRect().top;
-      const deltaY = oldTop - newTop;
-      if (Math.abs(deltaY) < 1) continue;
-
-      el.style.transition = 'none';
-      el.style.transform = `translate3d(0, ${deltaY}px, 0)`;
-      void el.offsetHeight;
-      el.style.transition = 'transform 340ms cubic-bezier(0.22, 1, 0.36, 1)';
-      el.style.transform = 'translate3d(0, 0, 0)';
-    }
-    prevTopsRef.current = {};
-  }, [heroOrder]);
-
   const handleSwapHeroCards = () => {
-    captureHeroPositions();
-    setHeroOrder((prev) => [prev[1], prev[0]]);
+    setActiveHero((prev) => (prev === 'summary' ? 'battle' : 'summary'));
   };
 
   const categoryMap = useMemo(() => new Map(categories.map((c) => [c.id, c])), [categories]);
@@ -245,252 +212,238 @@ export const HomePage: React.FC = () => {
   const battleDiff = battleCurrentVal - battlePrevVal;
   const battleIsWinning = battleMetric === 'expense' ? battleDiff <= 0 : battleDiff >= 0;
 
+  const isSummaryFront = activeHero === 'summary';
+
   return (
-    <div className="space-y-4 animate-fadeIn">
-      {/* 2枚の上下入れ替え可能カード（「今月の収支」＆「先月対決」） */}
-      <div className="space-y-3">
-        {heroOrder.map((cardId, idx) => {
-          const isTop = idx === 0;
-          if (cardId === 'summary') {
-            return (
-              <div
-                key="summary"
-                ref={(el) => {
-                  heroRefs.current['summary'] = el;
-                }}
-                onClick={handleSwapHeroCards}
-                role="button"
-                tabIndex={0}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter' || e.key === ' ') handleSwapHeroCards();
-                }}
-                className="rounded-3xl p-4 sm:p-5 text-white shadow-lg cursor-pointer select-none relative overflow-hidden active:scale-[0.99] transition-transform"
-                style={{
-                  background: `linear-gradient(135deg, ${customColors.summary} 0%, #2563EB 100%)`,
-                }}
-              >
-                <div className="flex items-center justify-between mb-1">
-                  <div className="flex items-center gap-1.5">
-                    <span className="text-xs font-bold text-white/85">
-                      {summaryTab === 'actual' ? '今月の収支' : '今月の予測収支'}
-                    </span>
-                    <ArrowUpDown className="w-3 h-3 text-white/60" />
-                  </div>
-                  <div
-                    className="inline-flex p-0.5 rounded-full bg-white/20 backdrop-blur-sm"
-                    onClick={(e) => e.stopPropagation()}
-                  >
-                    <button
-                      type="button"
-                      onClick={() => setSummaryTab('actual')}
-                      className={`px-3 py-1 rounded-full text-[11px] font-bold transition ${
-                        summaryTab === 'actual'
-                          ? 'bg-white text-primary-700 shadow-sm'
-                          : 'text-white/85 hover:text-white'
-                      }`}
-                    >
-                      実績
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setSummaryTab('forecast')}
-                      className={`px-3 py-1 rounded-full text-[11px] font-bold transition ${
-                        summaryTab === 'forecast'
-                          ? 'bg-white text-primary-700 shadow-sm'
-                          : 'text-white/85 hover:text-white'
-                      }`}
-                    >
-                      予測
-                    </button>
-                  </div>
-                </div>
-
-                <div
-                  className={`font-extrabold tracking-tight tabular-nums ${
-                    isTop ? 'text-3xl sm:text-4xl mb-3' : 'text-2xl mb-2'
-                  }`}
-                >
-                  {(summaryTab === 'actual' ? monthlyCashFlow.netSavings : forecastNetWithPlanned) <
-                  0
-                    ? `-¥${Math.abs(
-                        summaryTab === 'actual'
-                          ? monthlyCashFlow.netSavings
-                          : forecastNetWithPlanned
-                      ).toLocaleString()}`
-                    : `¥${(
-                        summaryTab === 'actual'
-                          ? monthlyCashFlow.netSavings
-                          : forecastNetWithPlanned
-                      ).toLocaleString()}`}
-                </div>
-
-                <div className="grid grid-cols-2 gap-2.5">
-                  <div className="rounded-2xl bg-white/15 backdrop-blur-sm px-3 py-2">
-                    <div className="flex items-center gap-1 text-[11px] font-semibold text-white/85">
-                      <TrendingUp className="w-3.5 h-3.5 text-emerald-300" />
-                      <span>収入</span>
-                    </div>
-                    <p className="text-sm sm:text-base font-extrabold tabular-nums mt-0.5">
-                      ¥{monthlyCashFlow.income.toLocaleString()}
-                    </p>
-                  </div>
-                  <div className="rounded-2xl bg-white/15 backdrop-blur-sm px-3 py-2">
-                    <div className="flex items-center gap-1 text-[11px] font-semibold text-white/85">
-                      <TrendingDown className="w-3.5 h-3.5 text-pink-300" />
-                      <span>{summaryTab === 'actual' ? '支出' : '支出 (予測)'}</span>
-                    </div>
-                    <p className="text-sm sm:text-base font-extrabold tabular-nums mt-0.5">
-                      ¥
-                      {(summaryTab === 'actual'
-                        ? monthlyCashFlow.expense
-                        : forecastExpenseWithPlanned
-                      ).toLocaleString()}
-                    </p>
-                  </div>
-                </div>
-
-                {isTop && summaryTab === 'forecast' && (
-                  <div className="mt-3 pt-2.5 border-t border-white/15 text-[11px] text-white/90 space-y-1">
-                    <p className="font-semibold">
-                      実績支出 ¥{monthlyCashFlow.expense.toLocaleString()} ＋ 未完了の予定{' '}
-                      {plannedSummary.items.length}件 ¥{plannedSummary.total.toLocaleString()}
-                    </p>
-                    {plannedSummary.items.slice(0, 2).map((item) => (
-                      <p key={item.id} className="text-white/80 truncate">
-                        ・{item.dueDate.slice(5).replace('-', '/')} {item.description} ¥
-                        {item.amount.toLocaleString()}
-                      </p>
-                    ))}
-                  </div>
-                )}
-
-                {isTop && summaryTab === 'actual' && (
-                  <p className="mt-2.5 text-[10px] text-white/75 text-center">
-                    確定した取引のみで集計（調整・両替・経費・貯金は除外）・タップで先月対決と入替
-                  </p>
-                )}
-              </div>
-            );
-          }
-
-          return (
+    <div className="space-y-4">
+      {/* 2枚を8〜9割重ねたスタックカード（「今月の収支」＆「先月対決」タップで上下入替） */}
+      <div className="pt-10 grid grid-cols-1 items-start">
+        {/* カード1: 今月の収支 */}
+        <div
+          onClick={handleSwapHeroCards}
+          role="button"
+          tabIndex={0}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' || e.key === ' ') handleSwapHeroCards();
+          }}
+          style={{
+            gridArea: '1 / 1',
+            background: `linear-gradient(135deg, ${customColors.summary} 0%, #2563EB 100%)`,
+          }}
+          className={`rounded-3xl p-4 sm:p-5 text-white cursor-pointer select-none relative overflow-hidden transition-all duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] ${
+            isSummaryFront
+              ? 'z-20 translate-y-0 scale-100 shadow-xl opacity-100'
+              : 'z-10 -translate-y-10 scale-[0.95] shadow-md opacity-95 hover:-translate-y-11'
+          }`}
+        >
+          <div className="flex items-center justify-between mb-1">
+            <div className="flex items-center gap-1.5">
+              <span className="text-xs font-bold text-white/85">
+                {summaryTab === 'actual' ? '今月の収支' : '今月の予測収支'}
+              </span>
+              <ArrowUpDown className="w-3 h-3 text-white/60" />
+            </div>
             <div
-              key="battle"
-              ref={(el) => {
-                heroRefs.current['battle'] = el;
-              }}
-              onClick={handleSwapHeroCards}
-              role="button"
-              tabIndex={0}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter' || e.key === ' ') handleSwapHeroCards();
-              }}
-              className="rounded-3xl p-4 bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 shadow-sm cursor-pointer select-none active:scale-[0.99] transition-transform space-y-2.5"
+              className="inline-flex p-0.5 rounded-full bg-white/20 backdrop-blur-sm"
+              onClick={(e) => e.stopPropagation()}
             >
-              <div className="flex items-center justify-between gap-2">
-                <div className="flex items-center gap-1.5">
-                  <span className="text-xs font-extrabold text-slate-800 dark:text-slate-100">
-                    先月対決 🥊
-                  </span>
-                  <ArrowUpDown className="w-3 h-3 text-slate-400" />
-                </div>
-                <div
-                  className="inline-flex p-0.5 rounded-full bg-slate-100 dark:bg-slate-800"
-                  onClick={(e) => e.stopPropagation()}
-                >
-                  <button
-                    type="button"
-                    onClick={() => setBattleMetric('expense')}
-                    className={`px-2.5 py-0.5 rounded-full text-[11px] font-bold transition ${
-                      battleMetric === 'expense'
-                        ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-sm'
-                        : 'text-slate-500'
-                    }`}
-                  >
-                    支出
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setBattleMetric('net')}
-                    className={`px-2.5 py-0.5 rounded-full text-[11px] font-bold transition ${
-                      battleMetric === 'net'
-                        ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-sm'
-                        : 'text-slate-500'
-                    }`}
-                  >
-                    収支
-                  </button>
-                </div>
-              </div>
-
-              <div
-                className={`px-3 py-1.5 rounded-xl text-[11px] font-bold flex items-center justify-center gap-1.5 ${
-                  battleIsWinning
-                    ? 'bg-emerald-50 dark:bg-emerald-950/50 text-emerald-700 dark:text-emerald-300'
-                    : 'bg-rose-50 dark:bg-rose-950/50 text-rose-600 dark:text-rose-400'
+              <button
+                type="button"
+                onClick={() => setSummaryTab('actual')}
+                className={`px-3 py-1 rounded-full text-[11px] font-bold transition ${
+                  summaryTab === 'actual'
+                    ? 'bg-white text-primary-700 shadow-sm'
+                    : 'text-white/85 hover:text-white'
                 }`}
               >
-                {battleIsWinning ? (
-                  <Sparkles className="w-3.5 h-3.5 shrink-0" />
-                ) : (
-                  <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
-                )}
-                <span>
-                  {battleMetric === 'expense'
-                    ? battleDiff > 0
-                      ? `先月より ${Math.abs(battleDiff).toLocaleString()} 円ペース早め`
-                      : `先月より ${Math.abs(battleDiff).toLocaleString()} 円ペース抑えめ`
-                    : battleDiff < 0
-                    ? `先月より ${Math.abs(battleDiff).toLocaleString()} 円黒字が減少`
-                    : `先月より ${Math.abs(battleDiff).toLocaleString()} 円黒字が増加`}
+                実績
+              </button>
+              <button
+                type="button"
+                onClick={() => setSummaryTab('forecast')}
+                className={`px-3 py-1 rounded-full text-[11px] font-bold transition ${
+                  summaryTab === 'forecast'
+                    ? 'bg-white text-primary-700 shadow-sm'
+                    : 'text-white/85 hover:text-white'
+                }`}
+              >
+                予測
+              </button>
+            </div>
+          </div>
+
+          <div className="text-3xl sm:text-4xl font-extrabold tracking-tight tabular-nums mb-3">
+            {(summaryTab === 'actual' ? monthlyCashFlow.netSavings : forecastNetWithPlanned) < 0
+              ? `-¥${Math.abs(
+                  summaryTab === 'actual' ? monthlyCashFlow.netSavings : forecastNetWithPlanned
+                ).toLocaleString()}`
+              : `¥${(
+                  summaryTab === 'actual' ? monthlyCashFlow.netSavings : forecastNetWithPlanned
+                ).toLocaleString()}`}
+          </div>
+
+          <div className="grid grid-cols-2 gap-2.5">
+            <div className="rounded-2xl bg-white/15 backdrop-blur-sm px-3 py-2">
+              <div className="flex items-center gap-1 text-[11px] font-semibold text-white/85">
+                <TrendingUp className="w-3.5 h-3.5 text-emerald-300" />
+                <span>収入</span>
+              </div>
+              <p className="text-sm sm:text-base font-extrabold tabular-nums mt-0.5">
+                ¥{monthlyCashFlow.income.toLocaleString()}
+              </p>
+            </div>
+            <div className="rounded-2xl bg-white/15 backdrop-blur-sm px-3 py-2">
+              <div className="flex items-center gap-1 text-[11px] font-semibold text-white/85">
+                <TrendingDown className="w-3.5 h-3.5 text-pink-300" />
+                <span>{summaryTab === 'actual' ? '支出' : '支出 (予測)'}</span>
+              </div>
+              <p className="text-sm sm:text-base font-extrabold tabular-nums mt-0.5">
+                ¥
+                {(summaryTab === 'actual'
+                  ? monthlyCashFlow.expense
+                  : forecastExpenseWithPlanned
+                ).toLocaleString()}
+              </p>
+            </div>
+          </div>
+
+          {summaryTab === 'forecast' ? (
+            <div className="mt-3 pt-2.5 border-t border-white/15 text-[11px] text-white/90 space-y-1">
+              <p className="font-semibold">
+                実績支出 ¥{monthlyCashFlow.expense.toLocaleString()} ＋ 未完了の予定{' '}
+                {plannedSummary.items.length}件 ¥{plannedSummary.total.toLocaleString()}
+              </p>
+              {plannedSummary.items.slice(0, 2).map((item) => (
+                <p key={item.id} className="text-white/80 truncate">
+                  ・{item.dueDate.slice(5).replace('-', '/')} {item.description} ¥
+                  {item.amount.toLocaleString()}
+                </p>
+              ))}
+            </div>
+          ) : (
+            <p className="mt-2.5 text-[10px] text-white/75 text-center">
+              確定した取引のみで集計（調整・両替・経費・貯金は除外）・タップで切替
+            </p>
+          )}
+        </div>
+
+        {/* カード2: 先月対決 */}
+        <div
+          onClick={handleSwapHeroCards}
+          role="button"
+          tabIndex={0}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' || e.key === ' ') handleSwapHeroCards();
+          }}
+          style={{ gridArea: '1 / 1' }}
+          className={`rounded-3xl p-4 sm:p-5 bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 cursor-pointer select-none space-y-3 transition-all duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] ${
+            !isSummaryFront
+              ? 'z-20 translate-y-0 scale-100 shadow-xl opacity-100'
+              : 'z-10 -translate-y-10 scale-[0.95] shadow-md opacity-95 hover:-translate-y-11'
+          }`}
+        >
+          <div className="flex items-center justify-between gap-2">
+            <div className="flex items-center gap-1.5">
+              <span className="text-xs font-extrabold text-slate-800 dark:text-slate-100">
+                先月対決 🥊
+              </span>
+              <ArrowUpDown className="w-3 h-3 text-slate-400" />
+            </div>
+            <div
+              className="inline-flex p-0.5 rounded-full bg-slate-100 dark:bg-slate-800"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <button
+                type="button"
+                onClick={() => setBattleMetric('expense')}
+                className={`px-2.5 py-0.5 rounded-full text-[11px] font-bold transition ${
+                  battleMetric === 'expense'
+                    ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-sm'
+                    : 'text-slate-500'
+                }`}
+              >
+                支出
+              </button>
+              <button
+                type="button"
+                onClick={() => setBattleMetric('net')}
+                className={`px-2.5 py-0.5 rounded-full text-[11px] font-bold transition ${
+                  battleMetric === 'net'
+                    ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-sm'
+                    : 'text-slate-500'
+                }`}
+              >
+                収支
+              </button>
+            </div>
+          </div>
+
+          <div
+            className={`px-3 py-2 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 ${
+              battleIsWinning
+                ? 'bg-emerald-50 dark:bg-emerald-950/50 text-emerald-700 dark:text-emerald-300'
+                : 'bg-rose-50 dark:bg-rose-950/50 text-rose-600 dark:text-rose-400'
+            }`}
+          >
+            {battleIsWinning ? (
+              <Sparkles className="w-4 h-4 shrink-0" />
+            ) : (
+              <AlertTriangle className="w-4 h-4 shrink-0" />
+            )}
+            <span>
+              {battleMetric === 'expense'
+                ? battleDiff > 0
+                  ? `先月より ${Math.abs(battleDiff).toLocaleString()} 円ペース早め`
+                  : `先月より ${Math.abs(battleDiff).toLocaleString()} 円ペース抑えめ`
+                : battleDiff < 0
+                ? `先月より ${Math.abs(battleDiff).toLocaleString()} 円黒字が減少`
+                : `先月より ${Math.abs(battleDiff).toLocaleString()} 円黒字が増加`}
+            </span>
+          </div>
+
+          <div className="space-y-2.5">
+            <div>
+              <div className="flex justify-between text-xs mb-1">
+                <span className="font-bold text-slate-600 dark:text-slate-300">
+                  今月（1日〜今日）
+                </span>
+                <span className="font-extrabold text-slate-900 dark:text-slate-100 tabular-nums">
+                  {battleCurrentVal.toLocaleString()} 円
                 </span>
               </div>
-
-              {isTop && (
-                <div className="space-y-2 pt-1 animate-fadeIn">
-                  <div>
-                    <div className="flex justify-between text-[11px] mb-1">
-                      <span className="font-bold text-slate-600 dark:text-slate-300">
-                        今月（1日〜今日）
-                      </span>
-                      <span className="font-extrabold text-slate-900 dark:text-slate-100 tabular-nums">
-                        {battleCurrentVal.toLocaleString()} 円
-                      </span>
-                    </div>
-                    <div className="h-2.5 rounded-full bg-slate-100 dark:bg-slate-800 overflow-hidden">
-                      <div
-                        className="h-full rounded-full transition-all duration-500"
-                        style={{
-                          width: `${Math.min(100, Math.round((Math.abs(battleCurrentVal) / battleMax) * 100))}%`,
-                          backgroundColor:
-                            battleMetric === 'expense'
-                              ? customColors.expense
-                              : customColors.summary,
-                        }}
-                      />
-                    </div>
-                  </div>
-                  <div>
-                    <div className="flex justify-between text-[11px] mb-1">
-                      <span className="font-bold text-slate-400">先月（同日まで）</span>
-                      <span className="font-bold text-slate-500 tabular-nums">
-                        {battlePrevVal.toLocaleString()} 円
-                      </span>
-                    </div>
-                    <div className="h-2.5 rounded-full bg-slate-100 dark:bg-slate-800 overflow-hidden">
-                      <div
-                        className="h-full rounded-full bg-slate-300 dark:bg-slate-600 transition-all duration-500"
-                        style={{
-                          width: `${Math.min(100, Math.round((Math.abs(battlePrevVal) / battleMax) * 100))}%`,
-                        }}
-                      />
-                    </div>
-                  </div>
-                </div>
-              )}
+              <div className="h-2.5 rounded-full bg-slate-100 dark:bg-slate-800 overflow-hidden">
+                <div
+                  className="h-full rounded-full transition-all duration-500"
+                  style={{
+                    width: `${Math.min(100, Math.round((Math.abs(battleCurrentVal) / battleMax) * 100))}%`,
+                    backgroundColor:
+                      battleMetric === 'expense' ? customColors.expense : customColors.summary,
+                  }}
+                />
+              </div>
             </div>
-          );
-        })}
+            <div>
+              <div className="flex justify-between text-xs mb-1">
+                <span className="font-bold text-slate-400">先月（同日まで）</span>
+                <span className="font-bold text-slate-500 tabular-nums">
+                  {battlePrevVal.toLocaleString()} 円
+                </span>
+              </div>
+              <div className="h-2.5 rounded-full bg-slate-100 dark:bg-slate-800 overflow-hidden">
+                <div
+                  className="h-full rounded-full bg-slate-300 dark:bg-slate-600 transition-all duration-500"
+                  style={{
+                    width: `${Math.min(100, Math.round((Math.abs(battlePrevVal) / battleMax) * 100))}%`,
+                  }}
+                />
+              </div>
+            </div>
+          </div>
+
+          <p className="text-[10px] text-slate-400 text-center">
+            支出は「少ないほど勝ち」、収支は「多いほど勝ち」・タップで切替
+          </p>
+        </div>
       </div>
 
       {/* コンパクトサマリー：月末支出予測（タップで詳細展開） */}

@@ -2,7 +2,7 @@ import React, { useMemo, useState } from 'react';
 import { useApp } from '@/contexts/AppContext';
 import { useTheme } from '@/contexts/ThemeContext';
 import { SubPageHeader } from '@/components/common/SubPageHeader';
-import { calculateMonthlyCashFlow } from '@/services/calculation/balanceEngine';
+import { generateAssetTrend } from '@/services/calculation/balanceEngine';
 import {
   calculateLinkedCardBillingForBank,
   getMonthlyPlannedExpenses,
@@ -118,37 +118,14 @@ export const AssetAnalysisView: React.FC = () => {
     });
   }, [assetAccounts, transactions, selectedYearMonth]);
 
-  // 現在の確定総資産から月次収支を逆算して推移を算出（過去の「調整」によるズレを防止）
-  const assetTrend = useMemo(() => {
-    const months: string[] = [];
-    let cur = selectedYearMonth;
-    for (let i = 0; i < trendRange; i++) {
-      months.unshift(cur);
-      cur = getPreviousYearMonth(cur);
-    }
-
-    const points: Array<{
-      month: string;
-      label: string;
-      totalAssets: number;
-      netAssets: number;
-    }> = new Array(months.length);
-
-    let runningTotal = totalAssets;
-    for (let i = months.length - 1; i >= 0; i--) {
-      const ym = months[i];
-      const liability = i === months.length - 1 ? unpaidLiabilities : 0;
-      points[i] = {
-        month: ym,
-        label: `${parseInt(ym.slice(5), 10)}月`,
-        totalAssets: runningTotal,
-        netAssets: runningTotal - liability,
-      };
-      const flow = calculateMonthlyCashFlow(transactions, ym, categoryNameMap);
-      runningTotal -= flow.netSavings;
-    }
-    return points;
-  }, [selectedYearMonth, trendRange, totalAssets, unpaidLiabilities, transactions, categoryNameMap]);
+  const assetTrend = useMemo(
+    () =>
+      generateAssetTrend(accounts, transactions, trendRange, categoryNameMap).map((p) => ({
+        ...p,
+        label: `${parseInt(p.month.slice(5), 10)}月`,
+      })),
+    [accounts, transactions, trendRange, categoryNameMap]
+  );
 
   return (
     <div className="space-y-4 animate-fadeIn">
@@ -288,7 +265,7 @@ export const AssetAnalysisView: React.FC = () => {
               総資産の推移
             </h2>
             <p className="text-[10px] text-slate-400">
-              現在の確定残高から月次収支で逆算（調整によるズレを補正）
+              各月末時点の取引履歴に基づく資産・純資産の推移
             </p>
           </div>
           <div className="inline-flex p-0.5 rounded-full bg-slate-100 dark:bg-slate-800">

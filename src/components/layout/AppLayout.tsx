@@ -14,15 +14,10 @@ export const AppLayout: React.FC = () => {
   const [isPlannedModalOpen, setIsPlannedModalOpen] = useState(false);
   const [plannedInitialDate, setPlannedInitialDate] = useState<string | undefined>(undefined);
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const [isRouteLoading, setIsRouteLoading] = useState(false);
   const location = useLocation();
 
   useEffect(() => {
     setSidebarOpen(false);
-    // 動画の画面遷移時スピナー演出
-    setIsRouteLoading(true);
-    const timer = window.setTimeout(() => setIsRouteLoading(false), 140);
-    return () => window.clearTimeout(timer);
   }, [location.pathname]);
 
   useEffect(() => {
@@ -78,14 +73,11 @@ export const AppLayout: React.FC = () => {
         />
 
         <main className="flex-1 px-4 sm:px-6 lg:px-8 pt-3 md:pt-5 pb-24 md:pb-10">
-          <div className="max-w-3xl lg:max-w-5xl mx-auto w-full">
-            {isRouteLoading ? (
-              <div className="flex items-center justify-center py-28">
-                <div className="w-7 h-7 rounded-full border-[3px] border-primary-200 border-t-primary-600 animate-spin" />
-              </div>
-            ) : (
-              <Outlet />
-            )}
+          <div
+            key={location.pathname}
+            className="max-w-3xl lg:max-w-5xl mx-auto w-full animate-pageEnter"
+          >
+            <Outlet />
           </div>
         </main>
 
