@@ -61,13 +61,22 @@ interface AppContextType {
   updateTransaction: (id: string, tx: Partial<Transaction>) => void;
   /** 取引を削除する。振替ペア（transferGroupId 共有）は両方削除する */
   deleteTransaction: (id: string) => void;
+  deleteTransactionsBatch: (ids: string[]) => void;
   addAccount: (acc: Omit<Account, 'id'>) => void;
   updateAccount: (id: string, acc: Partial<Account>) => void;
+  deleteAccount: (id: string) => void;
+  reorderAccounts: (fromIndex: number, toIndex: number) => void;
+  addCategory: (cat: Omit<Category, 'id'>) => void;
+  updateCategory: (id: string, cat: Partial<Category>) => void;
+  deleteCategory: (id: string) => void;
+  reorderCategories: (fromIndex: number, toIndex: number) => void;
   updateBudget: (budget: Partial<MonthlyBudget>) => void;
   addPlannedExpense: (item: Omit<PlannedExpense, 'id'>) => void;
+  updatePlannedExpense: (id: string, item: Partial<PlannedExpense>) => void;
   deletePlannedExpense: (id: string) => void;
   addSavingsGoal: (goal: Omit<SavingsGoal, 'id'>) => void;
   updateSavingsGoal: (id: string, goal: Partial<SavingsGoal>) => void;
+  deleteSavingsGoal: (id: string) => void;
   importTransactionsBatch: (
     newTransactions: Transaction[],
     newAccounts?: Account[],
@@ -568,6 +577,21 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     });
   };
 
+  const deleteTransactionsBatch = (ids: string[]) => {
+    if (ids.length === 0) return;
+    const idSet = new Set(ids);
+    setTransactions((prev) => {
+      const groupIds = new Set(
+        prev
+          .filter((tx) => idSet.has(tx.id) && tx.transferGroupId)
+          .map((tx) => tx.transferGroupId as string)
+      );
+      return prev.filter(
+        (tx) => !idSet.has(tx.id) && !(tx.transferGroupId && groupIds.has(tx.transferGroupId))
+      );
+    });
+  };
+
   const addAccount = (newAcc: Omit<Account, 'id'>) => {
     const acc: Account = { ...newAcc, id: `acc-${Date.now()}` };
     setAccounts((prev) => [...prev, acc]);
@@ -579,12 +603,71 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     );
   };
 
+  const deleteAccount = (id: string) => {
+    setAccounts((prev) => prev.filter((acc) => acc.id !== id));
+  };
+
+  const reorderAccounts = (fromIndex: number, toIndex: number) => {
+    setAccounts((prev) => {
+      const sorted = [...prev].sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0));
+      if (
+        fromIndex < 0 ||
+        toIndex < 0 ||
+        fromIndex >= sorted.length ||
+        toIndex >= sorted.length
+      ) {
+        return prev;
+      }
+      const [moved] = sorted.splice(fromIndex, 1);
+      sorted.splice(toIndex, 0, moved);
+      return sorted.map((acc, idx) => ({ ...acc, sortOrder: idx + 1 }));
+    });
+  };
+
+  const addCategory = (newCat: Omit<Category, 'id'>) => {
+    const cat: Category = { ...newCat, id: `cat-${Date.now()}` };
+    setCategories((prev) => [...prev, cat]);
+  };
+
+  const updateCategory = (id: string, updatedFields: Partial<Category>) => {
+    setCategories((prev) =>
+      prev.map((cat) => (cat.id === id ? { ...cat, ...updatedFields } : cat))
+    );
+  };
+
+  const deleteCategory = (id: string) => {
+    setCategories((prev) => prev.filter((cat) => cat.id !== id));
+  };
+
+  const reorderCategories = (fromIndex: number, toIndex: number) => {
+    setCategories((prev) => {
+      const sorted = [...prev].sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0));
+      if (
+        fromIndex < 0 ||
+        toIndex < 0 ||
+        fromIndex >= sorted.length ||
+        toIndex >= sorted.length
+      ) {
+        return prev;
+      }
+      const [moved] = sorted.splice(fromIndex, 1);
+      sorted.splice(toIndex, 0, moved);
+      return sorted.map((cat, idx) => ({ ...cat, sortOrder: idx + 1 }));
+    });
+  };
+
   const updateBudget = (updated: Partial<MonthlyBudget>) => {
     setBudget((prev) => ({ ...prev, ...updated, updatedAt: new Date().toISOString() }));
   };
 
   const addPlannedExpense = (item: Omit<PlannedExpense, 'id'>) => {
     setPlannedExpenses((prev) => [...prev, { ...item, id: `plan-${Date.now()}` }]);
+  };
+
+  const updatePlannedExpense = (id: string, updatedFields: Partial<PlannedExpense>) => {
+    setPlannedExpenses((prev) =>
+      prev.map((p) => (p.id === id ? { ...p, ...updatedFields } : p))
+    );
   };
 
   const deletePlannedExpense = (id: string) => {
@@ -602,6 +685,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setSavingsGoals((prev) =>
       prev.map((g) => (g.id === id ? { ...g, ...updatedFields } : g))
     );
+  };
+
+  const deleteSavingsGoal = (id: string) => {
+    setSavingsGoals((prev) => prev.filter((g) => g.id !== id));
   };
 
   const importTransactionsBatch = (
@@ -667,13 +754,22 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         addTransfer,
         updateTransaction,
         deleteTransaction,
+        deleteTransactionsBatch,
         addAccount,
         updateAccount,
+        deleteAccount,
+        reorderAccounts,
+        addCategory,
+        updateCategory,
+        deleteCategory,
+        reorderCategories,
         updateBudget,
         addPlannedExpense,
+        updatePlannedExpense,
         deletePlannedExpense,
         addSavingsGoal,
         updateSavingsGoal,
+        deleteSavingsGoal,
         importTransactionsBatch,
         resetToDefaultData,
         syncStatus,

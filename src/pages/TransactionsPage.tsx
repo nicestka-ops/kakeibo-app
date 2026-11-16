@@ -1,274 +1,268 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { useApp } from '@/contexts/AppContext';
 import { Transaction } from '@/types';
-import { Card } from '@/components/common/Card';
 import { TransactionFormModal } from '@/components/forms/TransactionFormModal';
-import { Search, Trash2, Edit2, ArrowUpRight, ArrowDownRight, ArrowLeftRight, CreditCard, Filter } from 'lucide-react';
-
-/** 取引種別の表示設定 */
-const TX_TYPE_CONFIG: Record<
-  Transaction['type'],
-  { label: string; icon: React.ReactNode; colorClass: string; prefix: string; bgColor: string }
-> = {
-  income: {
-    label: '収入',
-    icon: <ArrowUpRight className="w-5 h-5" />,
-    colorClass: 'text-emerald-600 dark:text-emerald-400',
-    prefix: '+',
-    bgColor: '#22c55e',
-  },
-  expense: {
-    label: '支出',
-    icon: <ArrowDownRight className="w-5 h-5" />,
-    colorClass: 'text-slate-900 dark:text-slate-100',
-    prefix: '-',
-    bgColor: '#64748b',
-  },
-  transfer_out: {
-    label: '振替（移動元）',
-    icon: <ArrowLeftRight className="w-5 h-5" />,
-    colorClass: 'text-indigo-600 dark:text-indigo-400',
-    prefix: '→',
-    bgColor: '#6366f1',
-  },
-  transfer_in: {
-    label: '振替（移動先）',
-    icon: <ArrowLeftRight className="w-5 h-5" />,
-    colorClass: 'text-indigo-500 dark:text-indigo-300',
-    prefix: '←',
-    bgColor: '#818cf8',
-  },
-  transfer: {
-    label: '振替',
-    icon: <ArrowLeftRight className="w-5 h-5" />,
-    colorClass: 'text-indigo-600 dark:text-indigo-400',
-    prefix: '→',
-    bgColor: '#6366f1',
-  },
-  card_payment: {
-    label: 'カード引落',
-    icon: <CreditCard className="w-5 h-5" />,
-    colorClass: 'text-amber-600 dark:text-amber-400',
-    prefix: '-',
-    bgColor: '#f59e0b',
-  },
-  adjustment: {
-    label: '残高調整',
-    icon: <ArrowUpRight className="w-5 h-5" />,
-    colorClass: 'text-sky-600 dark:text-sky-400',
-    prefix: '±',
-    bgColor: '#0ea5e9',
-  },
-};
+import { Search, CheckSquare, Square, Trash2, X } from 'lucide-react';
 
 export const TransactionsPage: React.FC = () => {
-  const { transactions, categories, accounts, deleteTransaction, selectedYearMonth } = useApp();
+  const { transactions, accounts, categories, deleteTransactionsBatch } = useApp();
+
   const [searchQuery, setSearchQuery] = useState('');
-  const [filterType, setFilterType] = useState<string>('all');
-  const [filterCategory, setFilterCategory] = useState<string>('all');
-  const [showFilters, setShowFilters] = useState(false);
-  const [editingTransaction, setEditingTransaction] = useState<Transaction | null>(null);
+  const [filterType, setFilterType] = useState<'all' | 'expense' | 'income'>('all');
+  const [isSelectMode, setIsSelectMode] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [editingTx, setEditingTx] = useState<Transaction | null>(null);
 
-  const categoryMap = new Map(categories.map((c) => [c.id, c]));
-  const accountMap = new Map(accounts.map((a) => [a.id, a]));
+  const accountMap = useMemo(() => new Map(accounts.map((a) => [a.id, a])), [accounts]);
+  const categoryMap = useMemo(() => new Map(categories.map((c) => [c.id, c])), [categories]);
 
-  const filtered = transactions.filter((tx) => {
-    if (!tx.date.startsWith(selectedYearMonth)) return false;
-    if (filterType === 'transfer') {
-      if (!['transfer', 'transfer_out', 'transfer_in'].includes(tx.type)) return false;
-    } else if (filterType !== 'all' && tx.type !== filterType) {
-      return false;
-    }
-    if (filterCategory !== 'all' && tx.categoryId !== filterCategory) return false;
-    if (searchQuery) {
-      const q = searchQuery.toLowerCase();
-      const descMatch = tx.description.toLowerCase().includes(q);
-      const catMatch = tx.categoryId ? categoryMap.get(tx.categoryId)?.name.toLowerCase().includes(q) : false;
-      const accMatch = accountMap.get(tx.accountId)?.name.toLowerCase().includes(q);
-      if (!descMatch && !catMatch && !accMatch) return false;
-    }
-    return true;
-  });
+  const filteredTransactions = useMemo(() => {
+    const q = searchQuery.trim().toLowerCase();
+    return [...transactions]
+      .filter((tx) => {
+        if (filterType === 'expense') {
+          if (tx.type !== 'expense' && tx.type !== 'card_payment' && tx.type !== 'transfer_out') {
+            return false;
+          }
+        } else if (filterType === 'income') {
+          if (tx.type !== 'income' && tx.type !== 'adjustment' && tx.type !== 'transfer_in') {
+            return false;
+          }
+        }
+        if (!q) return true;
+        const catName = (tx.categoryId ? categoryMap.get(tx.categoryId)?.name : '') || '';
+        const accName = accountMap.get(tx.accountId)?.name || '';
+        return (
+          (tx.description || '').toLowerCase().includes(q) ||
+          catName.toLowerCase().includes(q) ||
+          accName.toLowerCase().includes(q)
+        );
+      })
+      .sort((a, b) => b.date.localeCompare(a.date) || b.createdAt.localeCompare(a.createdAt));
+  }, [transactions, filterType, searchQuery, categoryMap, accountMap]);
 
-  const handleDelete = (tx: { id: string; description: string; type: Transaction['type']; transferGroupId?: string }) => {
-    const isTransfer = tx.type === 'transfer_out' || tx.type === 'transfer_in';
-    const msg = isTransfer
-      ? `「${tx.description}」の振替取引を削除しますか？\n（移動元・移動先の両エントリが削除されます）`
-      : `「${tx.description}」の取引を削除しますか？`;
-    if (confirm(msg)) {
-      deleteTransaction(tx.id);
+  // 日付ごとにグループ化
+  const groupedByDate = useMemo(() => {
+    const groups: Array<{
+      date: string;
+      items: Transaction[];
+      incomeTotal: number;
+      expenseTotal: number;
+    }> = [];
+    const map = new Map<string, Transaction[]>();
+    for (const tx of filteredTransactions) {
+      const list = map.get(tx.date) || [];
+      list.push(tx);
+      map.set(tx.date, list);
     }
+    for (const [date, items] of map.entries()) {
+      let incomeTotal = 0;
+      let expenseTotal = 0;
+      for (const tx of items) {
+        const amt = Math.round(Math.abs(tx.amount));
+        if (tx.type === 'income' || tx.type === 'transfer_in' || tx.type === 'adjustment') {
+          incomeTotal += amt;
+        } else {
+          expenseTotal += amt;
+        }
+      }
+      groups.push({ date, items, incomeTotal, expenseTotal });
+    }
+    return groups;
+  }, [filteredTransactions]);
+
+  const toggleSelect = (id: string) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
   };
 
-  const hasActiveFilters = filterType !== 'all' || filterCategory !== 'all';
+  const handleBulkDelete = () => {
+    if (selectedIds.size === 0) return;
+    if (!confirm(`選択した ${selectedIds.size} 件の取引を削除しますか？`)) return;
+    deleteTransactionsBatch(Array.from(selectedIds));
+    setSelectedIds(new Set());
+    setIsSelectMode(false);
+  };
 
   return (
-    <div className="space-y-5 animate-fadeIn px-1 sm:px-0">
-      {/* Search and Filters */}
-      <Card className="p-4 sm:p-5">
-        <div className="space-y-3 sm:space-y-0 sm:grid sm:grid-cols-[1fr_auto_auto] sm:items-end sm:gap-3">
-          <div className="relative">
-            <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
-            <input
-              type="text"
-              placeholder="摘要、カテゴリ、口座で検索..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full pl-9 pr-3 py-2.5 text-sm bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500 text-slate-900 dark:text-slate-100"
-            />
-          </div>
-
-          <div className="flex flex-wrap gap-2">
+    <div className="space-y-4 animate-fadeIn">
+      {/* Header */}
+      <div className="flex items-center justify-between pt-1">
+        <h1 className="text-2xl font-extrabold text-slate-900 dark:text-slate-50 tracking-tight">
+          取引履歴
+        </h1>
+        <div className="flex items-center gap-2">
+          {isSelectMode && selectedIds.size > 0 && (
             <button
-              onClick={() => setShowFilters(!showFilters)}
-              className={`flex items-center gap-1.5 px-3 py-2 text-sm font-medium rounded-xl transition ${
-                hasActiveFilters || showFilters
-                  ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800'
-                  : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700 border border-slate-200 dark:border-slate-700'
-              }`}
+              type="button"
+              onClick={handleBulkDelete}
+              className="inline-flex items-center gap-1 px-3 py-1.5 rounded-xl bg-rose-500 text-white text-xs font-bold shadow-sm active:scale-95 transition"
             >
-              <Filter className="w-4 h-4" />
-              <span className="hidden sm:inline">絞り込み</span>
+              <Trash2 className="w-3.5 h-3.5" />
+              <span>削除 ({selectedIds.size})</span>
             </button>
-          </div>
-        </div>
-
-        {showFilters && (
-          <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-3 pt-4 border-t border-slate-100 dark:border-slate-800 animate-fadeIn">
-            <select
-              value={filterType}
-              onChange={(e) => setFilterType(e.target.value)}
-              className="px-3 py-2.5 text-sm bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500 text-slate-900 dark:text-slate-100"
-            >
-              <option value="all">すべての種別</option>
-              <option value="expense">支出のみ</option>
-              <option value="income">収入のみ</option>
-              <option value="transfer">口座振替のみ</option>
-              <option value="card_payment">カード引落のみ</option>
-            </select>
-
-            <select
-              value={filterCategory}
-              onChange={(e) => setFilterCategory(e.target.value)}
-              className="px-3 py-2.5 text-sm bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500 text-slate-900 dark:text-slate-100"
-            >
-              <option value="all">すべてのカテゴリー</option>
-              {categories.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.name}
-                </option>
-              ))}
-            </select>
-          </div>
-        )}
-      </Card>
-
-      <div className="flex justify-between items-center px-1 text-sm text-slate-500 dark:text-slate-400">
-        <span>該当件数: {filtered.length} 件</span>
-        {hasActiveFilters && (
+          )}
           <button
+            type="button"
             onClick={() => {
-              setFilterType('all');
-              setFilterCategory('all');
-              setShowFilters(false);
+              setIsSelectMode((prev) => !prev);
+              setSelectedIds(new Set());
             }}
-            className="text-xs font-bold text-emerald-600 dark:text-emerald-400 hover:underline flex items-center gap-1"
+            className="inline-flex items-center gap-1 px-3 py-1.5 rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-xs font-bold text-slate-700 dark:text-slate-200 shadow-sm active:scale-95 transition"
           >
-            <Filter className="w-3.5 h-3.5" />
-            絞り込み解除
+            {isSelectMode ? (
+              <>
+                <X className="w-3.5 h-3.5" />
+                <span>完了</span>
+              </>
+            ) : (
+              <>
+                <CheckSquare className="w-3.5 h-3.5" />
+                <span>選択</span>
+              </>
+            )}
           </button>
-        )}
+        </div>
       </div>
 
-      <Card className="overflow-hidden">
-        {filtered.length === 0 ? (
-          <div className="py-12 text-center text-slate-400 text-sm">
-            条件に一致する取引データは見つかりませんでした
-          </div>
-        ) : (
-          <div className="divide-y divide-slate-100 dark:divide-slate-800">
-            {filtered.map((tx) => {
-              const cat = tx.categoryId ? categoryMap.get(tx.categoryId) : undefined;
-              const acc = accountMap.get(tx.accountId);
-              const cfg = TX_TYPE_CONFIG[tx.type] || TX_TYPE_CONFIG.expense;
+      {/* Search Bar */}
+      <div className="relative">
+        <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+        <input
+          type="text"
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+          placeholder="内容・カテゴリーで検索"
+          className="w-full pl-10 pr-4 py-2.5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 text-sm text-slate-800 dark:text-slate-100 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-primary-500 shadow-sm"
+        />
+      </div>
 
-              // 振替の場合、相手口座を探す
-              const pairTx = (tx.type === 'transfer_out' || tx.type === 'transfer_in') && tx.transferGroupId
-                ? transactions.find(
-                    (t) =>
-                      t.transferGroupId === tx.transferGroupId &&
-                      t.id !== tx.id
-                  )
-                : undefined;
-              const pairAcc = pairTx ? accountMap.get(pairTx.accountId) : undefined;
+      {/* Filter Tabs */}
+      <div className="grid grid-cols-3 p-1 bg-slate-200/70 dark:bg-slate-800 rounded-full">
+        {[
+          { id: 'all' as const, label: 'すべて' },
+          { id: 'expense' as const, label: '支出' },
+          { id: 'income' as const, label: '収入' },
+        ].map((tab) => (
+          <button
+            key={tab.id}
+            type="button"
+            onClick={() => setFilterType(tab.id)}
+            className={`py-2 rounded-full text-xs font-bold transition ${
+              filterType === tab.id
+                ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-sm'
+                : 'text-slate-500 dark:text-slate-400'
+            }`}
+          >
+            {tab.label}
+          </button>
+        ))}
+      </div>
 
-              return (
-                <div
-                  key={tx.id}
-                  className="py-3.5 flex items-center justify-between group hover:bg-slate-50/50 dark:hover:bg-slate-800/40 rounded-xl px-2 sm:px-4 transition"
-                >
-                  <div className="flex items-center gap-3.5 min-w-0">
-                    <div
-                      className="w-10 h-10 rounded-2xl flex items-center justify-center text-white shrink-0"
-                      style={{ backgroundColor: cat?.color || cfg.bgColor }}
+      {/* Grouped List */}
+      {groupedByDate.length === 0 ? (
+        <div className="rounded-3xl p-10 bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 text-center text-sm text-slate-400">
+          該当する取引がありません
+        </div>
+      ) : (
+        <div className="space-y-4">
+          {groupedByDate.map((group) => (
+            <div key={group.date} className="space-y-1.5">
+              <div className="flex items-center justify-between px-1 text-xs">
+                <span className="font-bold text-slate-500 dark:text-slate-400 tabular-nums">
+                  {group.date}
+                </span>
+                <div className="flex items-center gap-2 font-bold tabular-nums">
+                  {group.incomeTotal > 0 && (
+                    <span className="text-emerald-600 dark:text-emerald-400">
+                      +{group.incomeTotal.toLocaleString()}
+                    </span>
+                  )}
+                  {group.expenseTotal > 0 && (
+                    <span className="text-rose-500 dark:text-rose-400">
+                      -{group.expenseTotal.toLocaleString()}
+                    </span>
+                  )}
+                </div>
+              </div>
+
+              <div className="rounded-3xl bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 shadow-sm divide-y divide-slate-100 dark:divide-slate-800 overflow-hidden">
+                {group.items.map((tx) => {
+                  const cat = tx.categoryId ? categoryMap.get(tx.categoryId) : undefined;
+                  const acc = accountMap.get(tx.accountId);
+                  const isPositive =
+                    tx.type === 'income' || tx.type === 'transfer_in' || tx.type === 'adjustment';
+                  const isSelected = selectedIds.has(tx.id);
+
+                  return (
+                    <button
+                      key={tx.id}
+                      type="button"
+                      onClick={() => {
+                        if (isSelectMode) toggleSelect(tx.id);
+                        else setEditingTx(tx);
+                      }}
+                      className="w-full flex items-center justify-between gap-3 px-4 py-3 text-left hover:bg-slate-50/70 dark:hover:bg-slate-800/40 transition"
                     >
-                      {cfg.icon}
-                    </div>
-                    <div className="min-w-0">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <span className="font-bold text-sm text-slate-800 dark:text-slate-100 truncate">
-                          {tx.description}
-                        </span>
-                        {cat && (
-                          <span className="text-[11px] px-2 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 shrink-0">
-                            {cat.name}
+                      <div className="flex items-center gap-3 min-w-0">
+                        {isSelectMode && (
+                          <span className="text-primary-600 shrink-0">
+                            {isSelected ? (
+                              <CheckSquare className="w-5 h-5" />
+                            ) : (
+                              <Square className="w-5 h-5 text-slate-300" />
+                            )}
                           </span>
                         )}
-                        <span className="text-[11px] px-2 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 shrink-0">
-                          {cfg.label}
-                        </span>
+                        <div
+                          className="w-9 h-9 rounded-full flex items-center justify-center shrink-0"
+                          style={{
+                            backgroundColor: `${cat?.color || '#94a3b8'}20`,
+                          }}
+                        >
+                          <span
+                            className="w-2.5 h-2.5 rounded-full"
+                            style={{ backgroundColor: cat?.color || '#94a3b8' }}
+                          />
+                        </div>
+                        <div className="min-w-0">
+                          <p className="text-sm font-bold text-slate-800 dark:text-slate-100 truncate">
+                            {tx.description}
+                          </p>
+                          <p className="text-[11px] text-slate-400 truncate">
+                            {cat?.name || (tx.type === 'adjustment' ? '調整' : '未分類')}・
+                            {acc?.name || '不明'}
+                          </p>
+                        </div>
                       </div>
-                      <p className="text-xs text-slate-400 mt-0.5 truncate">
-                        {tx.date} • {acc?.name || '口座未設定'}
-                        {pairAcc && (
-                          <span> → {pairAcc.name}</span>
-                        )}
-                      </p>
-                    </div>
-                  </div>
 
-                  <div className="flex items-center gap-2 sm:gap-3 shrink-0">
-                    <span className={`font-extrabold text-base ${cfg.colorClass}`}>
-                      {cfg.prefix}¥{tx.amount.toLocaleString()}
-                    </span>
-                    <button
-                      onClick={() => setEditingTransaction(tx)}
-                      className="opacity-70 sm:opacity-0 sm:group-hover:opacity-100 p-1.5 text-slate-400 hover:text-emerald-600 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition"
-                      aria-label="編集"
-                      title="編集"
-                    >
-                      <Edit2 className="w-4 h-4" />
+                      <span
+                        className={`text-sm font-extrabold tabular-nums shrink-0 ${
+                          isPositive
+                            ? 'text-emerald-600 dark:text-emerald-400'
+                            : 'text-slate-800 dark:text-slate-100'
+                        }`}
+                      >
+                        {isPositive ? '+' : '-'}
+                        {Math.round(Math.abs(tx.amount)).toLocaleString()} 円
+                      </span>
                     </button>
-                    <button
-                      onClick={() => handleDelete(tx)}
-                      className="opacity-70 sm:opacity-0 sm:group-hover:opacity-100 p-1.5 text-slate-400 hover:text-rose-500 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition"
-                      aria-label="削除"
-                      title="削除"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        )}
-      </Card>
+                  );
+                })}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
 
       <TransactionFormModal
-        isOpen={Boolean(editingTransaction)}
-        onClose={() => setEditingTransaction(null)}
-        initialTransaction={editingTransaction}
+        isOpen={Boolean(editingTx)}
+        onClose={() => setEditingTx(null)}
+        initialTransaction={editingTx}
       />
     </div>
   );

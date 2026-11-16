@@ -2,7 +2,7 @@ import React, { createContext, useContext, useEffect, useState } from 'react';
 
 type Theme = 'light' | 'dark' | 'system';
 
-export type AccentColor = 'emerald' | 'blue' | 'indigo' | 'purple' | 'rose' | 'amber' | 'teal';
+export type AccentColor = 'purple' | 'violet' | 'pink' | 'blue';
 
 export interface AccentColorPreset {
   id: AccentColor;
@@ -13,21 +13,57 @@ export interface AccentColorPreset {
 
 export const ACCENT_COLOR_PRESETS: AccentColorPreset[] = [
   {
-    id: 'emerald',
-    label: 'エメラルド',
-    swatchHex: '#10b981',
+    id: 'purple',
+    label: 'パープル',
+    swatchHex: '#9333ea',
     shades: {
-      50: '236 253 245',
-      100: '209 250 229',
-      200: '167 243 208',
-      300: '110 231 183',
-      400: '52 211 153',
-      500: '16 185 129',
-      600: '5 150 105',
-      700: '4 120 87',
-      800: '6 95 70',
-      900: '6 78 59',
-      950: '2 44 34',
+      50: '250 245 255',
+      100: '243 232 255',
+      200: '233 213 255',
+      300: '216 180 254',
+      400: '192 132 252',
+      500: '168 85 247',
+      600: '147 51 234',
+      700: '126 34 206',
+      800: '107 33 168',
+      900: '88 28 135',
+      950: '59 7 100',
+    },
+  },
+  {
+    id: 'violet',
+    label: 'バイオレット',
+    swatchHex: '#7c3aed',
+    shades: {
+      50: '245 243 255',
+      100: '237 233 254',
+      200: '221 214 254',
+      300: '196 181 253',
+      400: '167 139 250',
+      500: '139 92 246',
+      600: '124 58 237',
+      700: '109 40 217',
+      800: '91 33 182',
+      900: '76 29 149',
+      950: '46 16 101',
+    },
+  },
+  {
+    id: 'pink',
+    label: 'ピンク',
+    swatchHex: '#ec4899',
+    shades: {
+      50: '253 242 248',
+      100: '252 231 243',
+      200: '251 207 232',
+      300: '249 168 212',
+      400: '244 114 182',
+      500: '236 72 153',
+      600: '219 39 119',
+      700: '190 24 93',
+      800: '157 23 77',
+      900: '131 24 67',
+      950: '80 7 36',
     },
   },
   {
@@ -48,117 +84,71 @@ export const ACCENT_COLOR_PRESETS: AccentColorPreset[] = [
       950: '23 37 84',
     },
   },
-  {
-    id: 'indigo',
-    label: 'インディゴ',
-    swatchHex: '#6366f1',
-    shades: {
-      50: '238 242 255',
-      100: '224 231 255',
-      200: '199 210 254',
-      300: '165 180 252',
-      400: '129 140 248',
-      500: '99 102 241',
-      600: '79 70 229',
-      700: '67 56 202',
-      800: '55 48 163',
-      900: '49 46 129',
-      950: '30 27 75',
-    },
-  },
-  {
-    id: 'purple',
-    label: 'パープル',
-    swatchHex: '#8b5cf6',
-    shades: {
-      50: '245 243 255',
-      100: '237 233 254',
-      200: '221 214 254',
-      300: '196 181 253',
-      400: '167 139 250',
-      500: '139 92 246',
-      600: '124 58 237',
-      700: '109 40 217',
-      800: '91 33 182',
-      900: '76 29 149',
-      950: '46 16 101',
-    },
-  },
-  {
-    id: 'rose',
-    label: 'ローズ',
-    swatchHex: '#f43f5e',
-    shades: {
-      50: '255 241 242',
-      100: '255 228 230',
-      200: '254 205 211',
-      300: '253 164 175',
-      400: '251 113 133',
-      500: '244 63 94',
-      600: '225 29 72',
-      700: '190 18 60',
-      800: '159 18 57',
-      900: '136 19 55',
-      950: '76 5 25',
-    },
-  },
-  {
-    id: 'amber',
-    label: 'アンバー',
-    swatchHex: '#f59e0b',
-    shades: {
-      50: '255 251 235',
-      100: '254 243 199',
-      200: '253 230 138',
-      300: '252 211 77',
-      400: '251 191 36',
-      500: '245 158 11',
-      600: '217 119 6',
-      700: '180 83 9',
-      800: '146 64 14',
-      900: '120 53 15',
-      950: '69 26 3',
-    },
-  },
-  {
-    id: 'teal',
-    label: 'ティール',
-    swatchHex: '#14b8a6',
-    shades: {
-      50: '240 253 250',
-      100: '204 251 241',
-      200: '153 246 228',
-      300: '94 234 212',
-      400: '45 212 191',
-      500: '20 184 166',
-      600: '13 148 136',
-      700: '15 118 110',
-      800: '17 94 89',
-      900: '19 78 74',
-      950: '4 47 46',
-    },
-  },
+];
+
+export type CustomColorKey = 'summary' | 'income' | 'expense' | 'assets' | 'planned' | 'budget';
+
+export type CustomColors = Record<CustomColorKey, string>;
+
+export const DEFAULT_CUSTOM_COLORS: CustomColors = {
+  summary: '#3B82F6',
+  income: '#10B981',
+  expense: '#EC4899',
+  assets: '#7047FF',
+  planned: '#F59E0B',
+  budget: '#22C55E',
+};
+
+export const CUSTOM_COLOR_META: Array<{
+  key: CustomColorKey;
+  label: string;
+  description: string;
+}> = [
+  { key: 'summary', label: '今月の収支', description: 'ホームの収支カード' },
+  { key: 'income', label: '収入', description: '収入の金額・グラフ' },
+  { key: 'expense', label: '支出', description: '支出の金額・グラフ' },
+  { key: 'assets', label: '口座・資産残高', description: '残高・総資産・利用可能額' },
+  { key: 'planned', label: '支払い予定', description: '支払い予定・カード引き落とし' },
+  { key: 'budget', label: '予算・達成率', description: '予算ゲージ・消化率' },
 ];
 
 interface ThemeContextType {
   theme: Theme;
   isDark: boolean;
   accentColor: AccentColor;
+  customColors: CustomColors;
   setTheme: (theme: Theme) => void;
   setAccentColor: (color: AccentColor) => void;
+  setCustomColor: (key: CustomColorKey, hex: string) => void;
+  resetCustomColors: () => void;
   toggleTheme: () => void;
 }
 
 const ThemeContext = createContext<ThemeContextType | undefined>(undefined);
 
+const CUSTOM_COLORS_STORAGE_KEY = 'kakeibo_custom_colors_v1';
+
 export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [theme, setThemeState] = useState<Theme>(() => {
-    return (localStorage.getItem('kakeibo_theme') as Theme) || 'system';
+    const saved = localStorage.getItem('kakeibo_theme') as Theme | null;
+    return saved === 'light' || saved === 'dark' || saved === 'system' ? saved : 'light';
   });
 
   const [accentColor, setAccentColorState] = useState<AccentColor>(() => {
     const saved = localStorage.getItem('kakeibo_accent_color') as AccentColor | null;
-    return ACCENT_COLOR_PRESETS.some((p) => p.id === saved) && saved ? saved : 'emerald';
+    return ACCENT_COLOR_PRESETS.some((p) => p.id === saved) && saved ? saved : 'blue';
+  });
+
+  const [customColors, setCustomColors] = useState<CustomColors>(() => {
+    try {
+      const saved = localStorage.getItem(CUSTOM_COLORS_STORAGE_KEY);
+      if (saved) {
+        return { ...DEFAULT_CUSTOM_COLORS, ...JSON.parse(saved) };
+      }
+    } catch {
+      // ignore
+    }
+    return DEFAULT_CUSTOM_COLORS;
   });
 
   const [isDark, setIsDark] = useState<boolean>(false);
@@ -190,7 +180,7 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
   useEffect(() => {
     const preset =
-      ACCENT_COLOR_PRESETS.find((p) => p.id === accentColor) || ACCENT_COLOR_PRESETS[0];
+      ACCENT_COLOR_PRESETS.find((p) => p.id === accentColor) || ACCENT_COLOR_PRESETS[3];
     const root = document.documentElement;
     for (const [shade, rgb] of Object.entries(preset.shades)) {
       root.style.setProperty(`--accent-${shade}`, rgb);
@@ -202,6 +192,17 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     localStorage.setItem('kakeibo_accent_color', accentColor);
   }, [accentColor]);
 
+  useEffect(() => {
+    const root = document.documentElement;
+    root.style.setProperty('--color-summary', customColors.summary);
+    root.style.setProperty('--color-income', customColors.income);
+    root.style.setProperty('--color-expense', customColors.expense);
+    root.style.setProperty('--color-assets', customColors.assets);
+    root.style.setProperty('--color-planned', customColors.planned);
+    root.style.setProperty('--color-budget', customColors.budget);
+    localStorage.setItem(CUSTOM_COLORS_STORAGE_KEY, JSON.stringify(customColors));
+  }, [customColors]);
+
   const setTheme = (newTheme: Theme) => {
     setThemeState(newTheme);
   };
@@ -210,13 +211,31 @@ export const ThemeProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     setAccentColorState(color);
   };
 
+  const setCustomColor = (key: CustomColorKey, hex: string) => {
+    setCustomColors((prev) => ({ ...prev, [key]: hex }));
+  };
+
+  const resetCustomColors = () => {
+    setCustomColors(DEFAULT_CUSTOM_COLORS);
+  };
+
   const toggleTheme = () => {
     setThemeState((prev) => (prev === 'dark' ? 'light' : 'dark'));
   };
 
   return (
     <ThemeContext.Provider
-      value={{ theme, isDark, accentColor, setTheme, setAccentColor, toggleTheme }}
+      value={{
+        theme,
+        isDark,
+        accentColor,
+        customColors,
+        setTheme,
+        setAccentColor,
+        setCustomColor,
+        resetCustomColors,
+        toggleTheme,
+      }}
     >
       {children}
     </ThemeContext.Provider>

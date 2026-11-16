@@ -3,33 +3,41 @@
 @tailwind utilities;
 
 :root {
-  --accent-50: 236 253 245;
-  --accent-100: 209 250 229;
-  --accent-200: 167 243 208;
-  --accent-300: 110 231 183;
-  --accent-400: 52 211 153;
-  --accent-500: 16 185 129;
-  --accent-600: 5 150 105;
-  --accent-700: 4 120 87;
-  --accent-800: 6 95 70;
-  --accent-900: 6 78 59;
-  --accent-950: 2 44 34;
+  --accent-50: 239 246 255;
+  --accent-100: 219 234 254;
+  --accent-200: 191 219 254;
+  --accent-300: 147 197 253;
+  --accent-400: 96 165 250;
+  --accent-500: 59 130 246;
+  --accent-600: 37 99 235;
+  --accent-700: 29 78 216;
+  --accent-800: 30 64 175;
+  --accent-900: 30 58 138;
+  --accent-950: 23 37 84;
+
+  --color-summary: #3B82F6;
+  --color-income: #10B981;
+  --color-expense: #EC4899;
+  --color-assets: #7047FF;
+  --color-planned: #F59E0B;
+  --color-budget: #22C55E;
 }
 
 @layer base {
   body {
-    @apply min-h-screen bg-slate-50 text-slate-900 transition-colors duration-200 dark:bg-slate-950 dark:text-slate-100;
+    @apply min-h-screen bg-[#F5F6FA] text-slate-900 transition-colors duration-200 dark:bg-slate-950 dark:text-slate-100;
+    font-family: -apple-system, BlinkMacSystemFont, 'Hiragino Sans', 'Hiragino Kaku Gothic ProN', 'Segoe UI', Roboto, sans-serif;
   }
-  
+
   html {
     -webkit-text-size-adjust: 100%;
     text-size-adjust: 100%;
   }
-  
+
   input[type="number"] {
     -moz-appearance: textfield;
   }
-  
+
   input[type="number"]::-webkit-outer-spin-button,
   input[type="number"]::-webkit-inner-spin-button {
     -webkit-appearance: none;
@@ -70,10 +78,37 @@
 }
 
 @keyframes fadeIn {
-  from { opacity: 0; transform: translateY(4px); }
+  from { opacity: 0; transform: translateY(6px); }
   to { opacity: 1; transform: translateY(0); }
 }
 
+@keyframes slideUp {
+  from { opacity: 0; transform: translateY(28px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes scaleIn {
+  from { opacity: 0; transform: scale(0.96); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+@keyframes cardSwitch {
+  0% { opacity: 0.4; transform: perspective(800px) rotateX(6deg) scale(0.985); }
+  100% { opacity: 1; transform: perspective(800px) rotateX(0deg) scale(1); }
+}
+
 .animate-fadeIn {
-  animation: fadeIn 0.3s ease-out forwards;
+  animation: fadeIn 0.26s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+
+.animate-slideUp {
+  animation: slideUp 0.28s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+
+.animate-scaleIn {
+  animation: scaleIn 0.22s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+
+.animate-cardSwitch {
+  animation: cardSwitch 0.28s cubic-bezier(0.22, 1, 0.36, 1) forwards;
 }

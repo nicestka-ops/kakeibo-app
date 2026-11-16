@@ -1,39 +1,44 @@
 import React, { useEffect, useState } from 'react';
 import { useApp } from '@/contexts/AppContext';
 import { Transaction, TransactionType } from '@/types';
-import { X, ArrowDownRight, ArrowUpRight, ArrowLeftRight } from 'lucide-react';
+import { X, Delete, Check } from 'lucide-react';
 
 interface TransactionFormModalProps {
   isOpen: boolean;
   onClose: () => void;
   initialTransaction?: Transaction | null;
+  initialType?: 'expense' | 'income' | 'transfer';
 }
 
 export const TransactionFormModal: React.FC<TransactionFormModalProps> = ({
   isOpen,
   onClose,
   initialTransaction = null,
+  initialType = 'expense',
 }) => {
   const { accounts, categories, addTransaction, updateTransaction, addTransfer, selectedYearMonth } = useApp();
   const isEditMode = Boolean(initialTransaction);
 
-  const [type, setType] = useState<TransactionType>('expense');
-  const [amount, setAmount] = useState<string>('');
+  const [type, setType] = useState<TransactionType>(initialType);
+  const [amountStr, setAmountStr] = useState<string>('0');
   const [date, setDate] = useState<string>(() => {
     const today = new Date().toISOString().split('T')[0];
     return today.startsWith(selectedYearMonth) ? today : `${selectedYearMonth}-01`;
   });
-  const [accountId, setAccountId] = useState<string>(accounts[0]?.id || '');
-  const [toAccountId, setToAccountId] = useState<string>(accounts[1]?.id || accounts[0]?.id || '');
-  const [categoryId, setCategoryId] = useState<string>(categories[0]?.id || '');
+  const [accountId, setAccountId] = useState<string>('');
+  const [toAccountId, setToAccountId] = useState<string>('');
+  const [categoryId, setCategoryId] = useState<string>('');
   const [description, setDescription] = useState<string>('');
   const [memo, setMemo] = useState<string>('');
+
+  const activeAccounts = accounts.filter((a) => a.isActive);
+  const activeCategories = categories.filter((c) => c.isActive);
 
   useEffect(() => {
     if (!isOpen) return;
     if (initialTransaction) {
       setType(initialTransaction.type);
-      setAmount(String(initialTransaction.amount));
+      setAmountStr(String(Math.round(Math.abs(initialTransaction.amount))));
       setDate(initialTransaction.date);
       setAccountId(initialTransaction.accountId);
       setCategoryId(initialTransaction.categoryId || '');
@@ -41,26 +46,64 @@ export const TransactionFormModal: React.FC<TransactionFormModalProps> = ({
       setMemo(initialTransaction.memo || '');
     } else {
       const today = new Date().toISOString().split('T')[0];
-      setType('expense');
-      setAmount('');
+      setType(initialType);
+      setAmountStr('0');
       setDate(today.startsWith(selectedYearMonth) ? today : `${selectedYearMonth}-01`);
-      setAccountId(accounts[0]?.id || '');
-      setToAccountId(accounts[1]?.id || accounts[0]?.id || '');
-      setCategoryId(categories[0]?.id || '');
+      setAccountId(activeAccounts[0]?.id || accounts[0]?.id || '');
+      setToAccountId(activeAccounts[1]?.id || activeAccounts[0]?.id || accounts[0]?.id || '');
+      const matchingCats = activeCategories.filter((c) =>
+        initialType === 'income'
+          ? c.kind === 'income' || c.kind === 'both'
+          : c.kind === 'expense' || c.kind === 'both'
+      );
+      setCategoryId(matchingCats[0]?.id || activeCategories[0]?.id || '');
       setDescription('');
       setMemo('');
     }
-  }, [isOpen, initialTransaction, selectedYearMonth, accounts, categories]);
+  }, [isOpen, initialTransaction, initialType, selectedYearMonth]);
 
   if (!isOpen) return null;
 
   const isTransfer = !isEditMode && type === 'transfer';
 
+  const filteredCategories = activeCategories.filter((c) => {
+    if (type === 'income') return c.kind === 'income' || c.kind === 'both';
+    if (type === 'expense') return c.kind === 'expense' || c.kind === 'both';
+    return true;
+  });
+
+  const handleKeypad = (key: string) => {
+    setAmountStr((prev) => {
+      if (key === 'backspace') {
+        if (prev.length <= 1) return '0';
+        return prev.slice(0, -1);
+      }
+      if (prev === '0') {
+        if (key === '0' || key === '00') return '0';
+        return key;
+      }
+      if (prev.length >= 9) return prev;
+      return prev + key;
+    });
+  };
+
+  const handleTypeSwitch = (nextType: 'expense' | 'income' | 'transfer') => {
+    setType(nextType);
+    const matching = activeCategories.filter((c) =>
+      nextType === 'income'
+        ? c.kind === 'income' || c.kind === 'both'
+        : c.kind === 'expense' || c.kind === 'both'
+    );
+    if (matching.length > 0 && !matching.some((c) => c.id === categoryId)) {
+      setCategoryId(matching[0].id);
+    }
+  };
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    const parsedAmount = Math.round(Number(amount));
+    const parsedAmount = Math.round(Number(amountStr));
     if (isNaN(parsedAmount) || parsedAmount <= 0) {
-      alert('有効な金額を整数で入力してください');
+      alert('金額を1円以上で入力してください');
       return;
     }
     if (isTransfer && accountId === toAccountId) {
@@ -68,11 +111,12 @@ export const TransactionFormModal: React.FC<TransactionFormModalProps> = ({
       return;
     }
 
-    const baseDesc = description.trim() || (
-      type === 'income' ? '臨時収入' :
-      type === 'transfer' ? '口座間振替' :
-      '買い物・支出'
-    );
+    const selectedCat = categories.find((c) => c.id === categoryId);
+    const baseDesc =
+      description.trim() ||
+      (type === 'transfer'
+        ? '口座間振替'
+        : selectedCat?.name || (type === 'income' ? '収入' : '支出'));
 
     if (isEditMode && initialTransaction) {
       updateTransaction(initialTransaction.id, {
@@ -85,7 +129,6 @@ export const TransactionFormModal: React.FC<TransactionFormModalProps> = ({
         memo: memo.trim() || undefined,
       });
     } else if (isTransfer) {
-      // 振替: transfer_out（移動元）+ transfer_in（移動先）の2エントリを生成
       addTransfer(
         {
           date,
@@ -107,218 +150,224 @@ export const TransactionFormModal: React.FC<TransactionFormModalProps> = ({
         memo: memo.trim() || undefined,
       });
     }
-
-    setAmount('');
-    setDescription('');
-    setMemo('');
     onClose();
   };
 
-  const filteredCategories = categories.filter((c) =>
-    type === 'income'
-      ? c.kind === 'income' || c.kind === 'both'
-      : c.kind === 'expense' || c.kind === 'both'
-  );
-
-  // 振替先の口座リスト（移動元を除く）
-  const toAccountOptions = accounts.filter((a) => a.id !== accountId);
+  const formattedAmount = Number(amountStr || '0').toLocaleString();
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-fadeIn">
-      <div className="bg-white dark:bg-slate-900 w-full max-w-lg rounded-3xl shadow-2xl border border-slate-100 dark:border-slate-800 overflow-hidden">
-        <div className="flex items-center justify-between p-5 border-b border-slate-100 dark:border-slate-800">
-          <h2 className="text-lg font-bold text-slate-800 dark:text-slate-100">
-            {isEditMode ? '取引を編集' : '取引を記録'}
+    <div
+      className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-slate-900/50 backdrop-blur-sm animate-fadeIn p-0 sm:p-4"
+      onClick={onClose}
+    >
+      <div
+        className="w-full sm:max-w-md bg-white dark:bg-slate-900 rounded-t-3xl sm:rounded-3xl shadow-2xl border border-slate-100 dark:border-slate-800 overflow-hidden animate-slideUp max-h-[92vh] flex flex-col"
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* Header */}
+        <div className="flex items-center justify-between px-5 pt-4 pb-2 shrink-0">
+          <h2 className="text-base font-extrabold text-slate-900 dark:text-slate-50">
+            {isEditMode ? '取引を編集' : '新しい取引'}
           </h2>
           <button
+            type="button"
             onClick={onClose}
-            className="p-2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 transition"
+            className="p-1.5 rounded-full text-slate-400 hover:text-slate-600 hover:bg-slate-100 dark:hover:bg-slate-800 transition"
+            aria-label="閉じる"
           >
             <X className="w-5 h-5" />
           </button>
         </div>
 
-        {/* 取引タイプ選択 */}
-        <div className={`grid ${isEditMode ? 'grid-cols-2' : 'grid-cols-3'} gap-2 p-4 bg-slate-50 dark:bg-slate-800/50`}>
-          <button
-            type="button"
-            onClick={() => setType('expense')}
-            className={`flex items-center justify-center gap-1.5 py-2.5 rounded-xl text-sm font-semibold transition ${
-              type === 'expense'
-                ? 'bg-rose-500 text-white shadow-md shadow-rose-500/20'
-                : 'text-slate-600 dark:text-slate-400 hover:bg-slate-200/60 dark:hover:bg-slate-800'
-            }`}
-          >
-            <ArrowDownRight className="w-4 h-4" />
-            支出
-          </button>
-          <button
-            type="button"
-            onClick={() => setType('income')}
-            className={`flex items-center justify-center gap-1.5 py-2.5 rounded-xl text-sm font-semibold transition ${
-              type === 'income'
-                ? 'bg-emerald-500 text-white shadow-md shadow-emerald-500/20'
-                : 'text-slate-600 dark:text-slate-400 hover:bg-slate-200/60 dark:hover:bg-slate-800'
-            }`}
-          >
-            <ArrowUpRight className="w-4 h-4" />
-            収入
-          </button>
+        {/* Scrollable body */}
+        <form onSubmit={handleSubmit} className="px-5 pb-5 overflow-y-auto space-y-4">
+          {/* Segmented Tabs */}
           {!isEditMode && (
+            <div className="grid grid-cols-3 p-1 bg-slate-100 dark:bg-slate-800 rounded-full">
+              {[
+                { id: 'expense' as const, label: '支出', activeClass: 'bg-pink-500 text-white shadow-sm' },
+                { id: 'income' as const, label: '収入', activeClass: 'bg-emerald-500 text-white shadow-sm' },
+                { id: 'transfer' as const, label: '振替', activeClass: 'bg-primary-600 text-white shadow-sm' },
+              ].map((tab) => (
+                <button
+                  key={tab.id}
+                  type="button"
+                  onClick={() => handleTypeSwitch(tab.id)}
+                  className={`py-2 rounded-full text-xs font-bold transition-all ${
+                    type === tab.id
+                      ? tab.activeClass
+                      : 'text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'
+                  }`}
+                >
+                  {tab.label}
+                </button>
+              ))}
+            </div>
+          )}
+
+          {/* Big Amount Display */}
+          <div className="text-center py-1">
+            <span className="text-4xl font-extrabold tracking-tight text-slate-900 dark:text-slate-50 tabular-nums">
+              {formattedAmount}
+            </span>
+            <span className="text-sm font-bold text-slate-400 ml-1.5">円</span>
+          </div>
+
+          {/* Calculator Keypad */}
+          <div className="grid grid-cols-3 gap-2">
+            {['1', '2', '3', '4', '5', '6', '7', '8', '9', '00', '0'].map((key) => (
+              <button
+                key={key}
+                type="button"
+                onClick={() => handleKeypad(key)}
+                className="h-12 rounded-2xl bg-slate-100/90 dark:bg-slate-800 hover:bg-slate-200/80 dark:hover:bg-slate-700 active:scale-95 text-lg font-bold text-slate-800 dark:text-slate-100 transition"
+              >
+                {key}
+              </button>
+            ))}
             <button
               type="button"
-              onClick={() => setType('transfer')}
-              className={`flex items-center justify-center gap-1.5 py-2.5 rounded-xl text-sm font-semibold transition ${
-                isTransfer
-                  ? 'bg-indigo-500 text-white shadow-md shadow-indigo-500/20'
-                  : 'text-slate-600 dark:text-slate-400 hover:bg-slate-200/60 dark:hover:bg-slate-800'
-              }`}
+              onClick={() => handleKeypad('backspace')}
+              className="h-12 rounded-2xl bg-slate-100/90 dark:bg-slate-800 hover:bg-slate-200/80 dark:hover:bg-slate-700 active:scale-95 flex items-center justify-center text-slate-600 dark:text-slate-300 transition"
+              aria-label="1文字削除"
             >
-              <ArrowLeftRight className="w-4 h-4" />
-              口座振替
+              <Delete className="w-5 h-5" />
             </button>
-          )}
-        </div>
+          </div>
 
-        <form onSubmit={handleSubmit} className="p-5 space-y-4">
-          {/* 金額 */}
+          {/* Account Chips */}
           <div>
-            <label className="block text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1">
-              金額（円）
-            </label>
-            <div className="relative">
-              <span className="absolute left-4 top-1/2 -translate-y-1/2 text-2xl font-bold text-slate-400">¥</span>
-              <input
-                type="number"
-                inputMode="numeric"
-                required
-                min="1"
-                step="1"
-                placeholder="0"
-                value={amount}
-                onChange={(e) => setAmount(e.target.value)}
-                className="w-full pl-10 pr-4 py-3 text-2xl font-bold bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 rounded-2xl focus:outline-none focus:ring-2 focus:ring-emerald-500 text-slate-900 dark:text-slate-100"
-              />
-            </div>
-          </div>
-
-          {/* 日付 + 口座 */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-            <div>
-              <label className="block text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1">
-                日付
-              </label>
-              <input
-                type="date"
-                required
-                value={date}
-                onChange={(e) => setDate(e.target.value)}
-                className="w-full px-3 py-2.5 text-sm bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500 text-slate-900 dark:text-slate-100"
-              />
-            </div>
-            <div>
-              <label className="block text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1">
-                {isTransfer ? '振替元口座' : '口座'}
-              </label>
-              <select
-                value={accountId}
-                onChange={(e) => {
-                  setAccountId(e.target.value);
-                  // 振替先が同じになった場合は別の口座を選ぶ
-                  if (e.target.value === toAccountId) {
-                    const other = accounts.find((a) => a.id !== e.target.value);
-                    if (other) setToAccountId(other.id);
-                  }
-                }}
-                className="w-full px-3 py-2.5 text-sm bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500 text-slate-900 dark:text-slate-100"
-              >
-                {accounts.map((acc) => (
-                  <option key={acc.id} value={acc.id}>
-                    {acc.name}
-                  </option>
-                ))}
-              </select>
-            </div>
-          </div>
-
-          {/* 振替先口座（振替モードのみ） */}
-          {isTransfer && (
-            <div>
-              <label className="block text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1">
-                振替先口座
-              </label>
-              <select
-                value={toAccountId}
-                onChange={(e) => setToAccountId(e.target.value)}
-                className="w-full px-3 py-2.5 text-sm bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 text-slate-900 dark:text-slate-100"
-              >
-                {toAccountOptions.map((acc) => (
-                  <option key={acc.id} value={acc.id}>
-                    {acc.name}
-                  </option>
-                ))}
-              </select>
-              <p className="mt-1 text-xs text-slate-400">
-                ※ 振替は総資産を変化させません（口座間の移動のみ）
-              </p>
-            </div>
-          )}
-
-          {/* カテゴリー（収入・支出のみ） */}
-          {!isTransfer && (
-            <div>
-              <label className="block text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1">
-                カテゴリー
-              </label>
-              <div className="flex flex-wrap gap-2 max-h-32 overflow-y-auto p-1">
-                {filteredCategories.map((cat) => (
+            <p className="text-xs font-bold text-slate-500 dark:text-slate-400 mb-2">
+              {isTransfer ? '振替元口座' : '決済手段'}
+            </p>
+            <div className="flex flex-wrap gap-2">
+              {activeAccounts.map((acc) => {
+                const selected = accountId === acc.id;
+                return (
                   <button
-                    key={cat.id}
+                    key={acc.id}
                     type="button"
-                    onClick={() => setCategoryId(cat.id)}
-                    className={`px-3 py-1.5 rounded-xl text-xs font-medium transition flex items-center gap-1.5 ${
-                      categoryId === cat.id
-                        ? 'bg-slate-900 text-white dark:bg-white dark:text-slate-900 shadow-sm'
-                        : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700'
+                    onClick={() => setAccountId(acc.id)}
+                    className={`px-3.5 py-2 rounded-xl text-xs font-bold transition ${
+                      selected
+                        ? 'bg-primary-600 text-white shadow-sm'
+                        : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700'
                     }`}
                   >
-                    <span
-                      className="w-2.5 h-2.5 rounded-full"
-                      style={{ backgroundColor: cat.color }}
-                    />
-                    {cat.name}
+                    {acc.name}
                   </button>
-                ))}
+                );
+              })}
+            </div>
+          </div>
+
+          {isTransfer && (
+            <div>
+              <p className="text-xs font-bold text-slate-500 dark:text-slate-400 mb-2">
+                振替先口座
+              </p>
+              <div className="flex flex-wrap gap-2">
+                {activeAccounts.map((acc) => {
+                  const selected = toAccountId === acc.id;
+                  return (
+                    <button
+                      key={acc.id}
+                      type="button"
+                      onClick={() => setToAccountId(acc.id)}
+                      className={`px-3.5 py-2 rounded-xl text-xs font-bold transition ${
+                        selected
+                          ? 'bg-primary-600 text-white shadow-sm'
+                          : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700'
+                      }`}
+                    >
+                      {acc.name}
+                    </button>
+                  );
+                })}
               </div>
             </div>
           )}
 
-          {/* 品名・摘要 */}
+          {/* Category Chips */}
+          {!isTransfer && (
+            <div>
+              <p className="text-xs font-bold text-slate-500 dark:text-slate-400 mb-2">
+                カテゴリー
+              </p>
+              <div className="flex flex-wrap gap-2">
+                {filteredCategories.map((cat) => {
+                  const selected = categoryId === cat.id;
+                  return (
+                    <button
+                      key={cat.id}
+                      type="button"
+                      onClick={() => setCategoryId(cat.id)}
+                      className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold border transition ${
+                        selected
+                          ? 'bg-pink-50 dark:bg-pink-950/40 text-slate-900 dark:text-white border-pink-400 dark:border-pink-500 shadow-sm'
+                          : 'bg-slate-50 dark:bg-slate-800/80 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:bg-slate-100'
+                      }`}
+                    >
+                      <span
+                        className="w-2.5 h-2.5 rounded-full shrink-0"
+                        style={{ backgroundColor: cat.color || '#94a3b8' }}
+                      />
+                      <span>{cat.name}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* Date & Description & Memo */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+            <div>
+              <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 mb-1">
+                利用日
+              </label>
+              <input
+                type="date"
+                value={date}
+                onChange={(e) => setDate(e.target.value)}
+                className="w-full px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-xs font-semibold text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-primary-500"
+                required
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 mb-1">
+                内容
+              </label>
+              <input
+                type="text"
+                value={description}
+                onChange={(e) => setDescription(e.target.value)}
+                placeholder="例: ランチ、スーパー"
+                className="w-full px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-xs font-semibold text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-primary-500"
+              />
+            </div>
+          </div>
+
           <div>
-            <label className="block text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1">
-              品名・摘要
+            <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 mb-1">
+              メモ（任意）
             </label>
             <input
               type="text"
-              placeholder={isTransfer ? '例: 生活費の口座移動' : '例: スーパー、昼食、光熱費など'}
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-              className="w-full px-3 py-2.5 text-sm bg-slate-50 dark:bg-slate-800/80 border border-slate-200 dark:border-slate-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500 text-slate-900 dark:text-slate-100"
+              value={memo}
+              onChange={(e) => setMemo(e.target.value)}
+              placeholder="補足メモ"
+              className="w-full px-3 py-2 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-xs text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-primary-500"
             />
           </div>
 
-          <div className="pt-2">
-            <button
-              type="submit"
-              className={`w-full py-3.5 text-white font-bold rounded-2xl shadow-lg transition transform active:scale-[0.98] ${
-                isTransfer
-                  ? 'bg-indigo-600 hover:bg-indigo-700 shadow-indigo-600/30'
-                  : 'bg-emerald-600 hover:bg-emerald-700 shadow-emerald-600/30'
-              }`}
-            >
-              {isEditMode ? '更新する' : isTransfer ? '振替を記録する' : '登録する'}
-            </button>
-          </div>
+          <button
+            type="submit"
+            className="w-full py-3.5 rounded-2xl bg-primary-600 hover:bg-primary-700 active:scale-[0.99] text-white font-bold text-sm shadow-lg shadow-primary-500/25 flex items-center justify-center gap-2 transition"
+          >
+            <Check className="w-4 h-4" />
+            <span>{isEditMode ? '更新する' : '登録する'}</span>
+          </button>
         </form>
       </div>
     </div>

@@ -30,7 +30,7 @@ export interface MonthlyCashFlow {
  * - asOfDate を指定すると、その日付以前の取引のみ対象
  * - transfer は transfer_out（引き落とし）/ transfer_in（入金）の2エントリ方式
  */
-export const CASHFLOW_EXCLUDED_CATEGORY_NAMES = new Set(['調整', '経費']);
+export const CASHFLOW_EXCLUDED_CATEGORY_NAMES = new Set(['調整', '経費', '貯金', 'イベント貯金']);
 export const EXCHANGE_CATEGORY_NAME = '両替';
 
 export function isExcludedFromCashFlow(

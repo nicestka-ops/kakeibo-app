@@ -1,264 +1,397 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { useApp } from '@/contexts/AppContext';
-import { Card } from '@/components/common/Card';
-import { Target, Plus, CheckCircle2, X, Trash2, Edit2, Wallet } from 'lucide-react';
+import { SubPageHeader } from '@/components/common/SubPageHeader';
+import { SavingsGoal } from '@/types';
+import { PiggyBank, Plus, Pencil, Trash2, X, Info } from 'lucide-react';
 
 export const GoalsPage: React.FC = () => {
-  const { savingsGoals, addSavingsGoal, updateSavingsGoal, accounts, accountBalances } = useApp();
-  const [isAdding, setIsAdding] = useState(false);
-  const [editingGoal, setEditingGoal] = useState<typeof savingsGoals[0] | null>(null);
+  const {
+    savingsGoals,
+    accounts,
+    categories,
+    transactions,
+    addSavingsGoal,
+    updateSavingsGoal,
+    deleteSavingsGoal,
+    addTransaction,
+  } = useApp();
+
+  const [isFormOpen, setIsFormOpen] = useState(false);
+  const [editingGoal, setEditingGoal] = useState<SavingsGoal | null>(null);
   const [title, setTitle] = useState('');
   const [targetAmount, setTargetAmount] = useState('');
-  const [currentAmount, setCurrentAmount] = useState('');
+  const [currentAmount, setCurrentAmount] = useState('0');
   const [deadlineDate, setDeadlineDate] = useState('');
-  const [linkedAccountId, setLinkedAccountId] = useState('');
 
-  const handleCreate = (e: React.FormEvent) => {
+  const [txModalGoal, setTxModalGoal] = useState<{
+    goal: SavingsGoal;
+    mode: 'deposit' | 'withdraw';
+  } | null>(null);
+  const [moveAmount, setMoveAmount] = useState('');
+
+  const cashAccount = useMemo(
+    () =>
+      accounts.find((a) => a.isActive && (a.type === 'cash' || a.name.includes('現金'))) ||
+      accounts.find((a) => a.isActive) ||
+      null,
+    [accounts]
+  );
+
+  const savingsCategory = useMemo(
+    () =>
+      categories.find((c) => c.name === 'イベント貯金' || c.name === '貯金') ||
+      categories.find((c) => c.name === '調整') ||
+      null,
+    [categories]
+  );
+
+  // 既存の「積立 → {title}」「引き出し ← {title}」履歴から各目標の積立額を算出できるヘルパー
+  const goalHistoryTotals = useMemo(() => {
+    const map = new Map<string, number>();
+    for (const tx of transactions) {
+      const desc = tx.description || '';
+      if (desc.startsWith('積立 → ')) {
+        const name = desc.replace('積立 → ', '').trim();
+        map.set(name, (map.get(name) || 0) + Math.round(Math.abs(tx.amount)));
+      } else if (desc.startsWith('引き出し ← ')) {
+        const name = desc.replace('引き出し ← ', '').trim();
+        map.set(name, (map.get(name) || 0) - Math.round(Math.abs(tx.amount)));
+      }
+    }
+    return map;
+  }, [transactions]);
+
+  const openNewModal = () => {
+    setEditingGoal(null);
+    setTitle('');
+    setTargetAmount('');
+    setCurrentAmount('0');
+    setDeadlineDate('');
+    setIsFormOpen(true);
+  };
+
+  const openEditModal = (goal: SavingsGoal) => {
+    setEditingGoal(goal);
+    setTitle(goal.title);
+    setTargetAmount(String(goal.targetAmount));
+    setCurrentAmount(String(goal.currentAmount));
+    setDeadlineDate(goal.deadlineDate || '');
+    setIsFormOpen(true);
+  };
+
+  const handleSaveGoal = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!title.trim()) return;
+    const target = Math.round(Number(targetAmount));
+    const current = Math.round(Number(currentAmount || '0'));
+    if (!title.trim() || isNaN(target) || target <= 0) {
+      alert('タイトルと有効な目標金額を入力してください');
+      return;
+    }
 
     if (editingGoal) {
       updateSavingsGoal(editingGoal.id, {
         title: title.trim(),
-        targetAmount: Math.round(Number(targetAmount) || 0),
-        currentAmount: Math.round(Number(currentAmount) || 0),
+        targetAmount: target,
+        currentAmount: Math.max(0, current),
         deadlineDate: deadlineDate || undefined,
-        linkedAccountId: linkedAccountId || undefined,
       });
     } else {
+      const historyBase = goalHistoryTotals.get(title.trim()) || 0;
       addSavingsGoal({
         title: title.trim(),
-        targetAmount: Math.round(Number(targetAmount) || 0),
-        currentAmount: Math.round(Number(currentAmount) || 0),
+        targetAmount: target,
+        currentAmount: Math.max(0, current || historyBase),
         deadlineDate: deadlineDate || undefined,
-        linkedAccountId: linkedAccountId || undefined,
+        linkedAccountId: cashAccount?.id,
+      });
+    }
+    setIsFormOpen(false);
+  };
+
+  const handleMoveFunds = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!txModalGoal) return;
+    const amt = Math.round(Number(moveAmount));
+    if (isNaN(amt) || amt <= 0) {
+      alert('有効な金額を入力してください');
+      return;
+    }
+    const { goal, mode } = txModalGoal;
+    const nextCurrent =
+      mode === 'deposit'
+        ? goal.currentAmount + amt
+        : Math.max(0, goal.currentAmount - amt);
+
+    updateSavingsGoal(goal.id, { currentAmount: nextCurrent });
+
+    if (cashAccount) {
+      const today = new Date().toISOString().split('T')[0];
+      addTransaction({
+        date: today,
+        type: mode === 'deposit' ? 'expense' : 'income',
+        amount: amt,
+        accountId: cashAccount.id,
+        categoryId: savingsCategory?.id,
+        description:
+          mode === 'deposit' ? `積立 → ${goal.title}` : `引き出し ← ${goal.title}`,
       });
     }
 
-    setTitle('');
-    setTargetAmount('');
-    setCurrentAmount('');
-    setDeadlineDate('');
-    setLinkedAccountId('');
-    setIsAdding(false);
-    setEditingGoal(null);
-  };
-
-  const startEditing = (goal: typeof savingsGoals[0]) => {
-    setEditingGoal(goal);
-    setTitle(goal.title);
-    setTargetAmount(goal.targetAmount.toString());
-    setCurrentAmount(goal.currentAmount.toString());
-    setDeadlineDate(goal.deadlineDate || '');
-    setLinkedAccountId(goal.linkedAccountId || '');
-    setIsAdding(true);
-  };
-
-  const handleDelete = (id: string) => {
-    if (confirm('この貯金目標を削除しますか？')) {
-      updateSavingsGoal(id, { targetAmount: 0 }); // Soft delete by setting target to 0
-    }
+    setTxModalGoal(null);
+    setMoveAmount('');
   };
 
   return (
-    <div className="space-y-5 animate-fadeIn px-1 sm:px-0">
-      <div className="flex justify-between items-center">
-        <div>
-          <h2 className="text-xl font-extrabold text-slate-800 dark:text-slate-100">貯金目標</h2>
-          <p className="text-xs text-slate-400 mt-0.5">夢や将来のための積立計画</p>
-        </div>
-        <button
-          onClick={() => { setEditingGoal(null); setIsAdding(true); }}
-          className="flex items-center gap-1.5 px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl shadow-md transition"
-        >
-          <Plus className="w-4 h-4" />
-          新しい目標
-        </button>
-      </div>
-
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-5">
-        {savingsGoals.filter(g => g.targetAmount > 0).map((goal) => {
-          const percent =
-            goal.targetAmount > 0
-              ? Math.min(Math.round((goal.currentAmount / goal.targetAmount) * 100), 100)
-              : 0;
-          const remaining = Math.max(goal.targetAmount - goal.currentAmount, 0);
-          const linkedAccount = goal.linkedAccountId ? accounts.find(a => a.id === goal.linkedAccountId) : null;
-          const linkedBalance = linkedAccount ? accountBalances[linkedAccount.id] ?? 0 : 0;
-
-          return (
-            <Card key={goal.id} className="space-y-4">
-              <div className="flex items-start justify-between">
-                <div className="flex items-center gap-3 min-w-0">
-                  <div className="w-12 h-12 rounded-2xl bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 flex items-center justify-center shrink-0">
-                    <Target className="w-6 h-6" />
-                  </div>
-                  <div className="min-w-0">
-                    <h3 className="font-bold text-base text-slate-800 dark:text-slate-100 truncate">
-                      {goal.title}
-                    </h3>
-                    {goal.deadlineDate && (
-                      <p className="text-xs text-slate-400">目標期日: {goal.deadlineDate}</p>
-                    )}
-                    {linkedAccount && (
-                      <p className="text-xs text-slate-400 flex items-center gap-1">
-                        <Wallet className="w-3 h-3" />
-                        連携: {linkedAccount.name} (残高: ¥{linkedBalance.toLocaleString()})
-                      </p>
-                    )}
-                  </div>
-                </div>
-                <span className="text-xs font-extrabold px-2.5 py-1 rounded-full bg-emerald-100 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 shrink-0">
-                  {percent}% 達成
-                </span>
-              </div>
-
-              <div className="flex justify-between items-baseline pt-2">
-                <div className="min-w-0">
-                  <span className="text-xs text-slate-400">現在積立額</span>
-                  <p className="text-xl font-extrabold text-slate-800 dark:text-slate-100 truncate">
-                    ¥{goal.currentAmount.toLocaleString()}
-                  </p>
-                </div>
-                <div className="text-right shrink-0 ml-2">
-                  <span className="text-xs text-slate-400">目標金額</span>
-                  <p className="text-lg font-bold text-slate-600 dark:text-slate-300">
-                    ¥{goal.targetAmount.toLocaleString()}
-                  </p>
-                </div>
-              </div>
-
-              <div className="w-full h-3 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
-                <div
-                  className="h-full bg-emerald-500 rounded-full transition-all duration-500"
-                  style={{ width: `${percent}%` }}
-                />
-              </div>
-
-              <div className="flex justify-between items-center text-xs text-slate-400 pt-1">
-                <span>残りあと ¥{remaining.toLocaleString()}</span>
-                {percent >= 100 && (
-                  <span className="text-emerald-600 font-bold flex items-center gap-1">
-                    <CheckCircle2 className="w-4 h-4" />
-                    目標達成おめでとうございます！
-                  </span>
-                )}
-              </div>
-
-              <div className="flex items-center gap-1 pt-1 border-t border-slate-100 dark:border-slate-800">
-                <button
-                  onClick={() => startEditing(goal)}
-                  className="flex-1 py-2 text-xs font-medium text-slate-600 dark:text-slate-400 hover:text-emerald-600 dark:hover:text-emerald-400"
-                >
-                  編集
-                </button>
-                <button
-                  onClick={() => handleDelete(goal.id)}
-                  className="flex-1 py-2 text-xs font-medium text-slate-400 hover:text-rose-500"
-                >
-                  削除
-                </button>
-              </div>
-            </Card>
-          );
-        })}
-      </div>
-
-      {savingsGoals.filter(g => g.targetAmount > 0).length === 0 && (
-        <Card className="py-12 text-center">
-          <Target className="w-16 h-16 text-slate-300 dark:text-slate-600 mx-auto mb-4" />
-          <p className="text-sm text-slate-400 mb-4">貯金目標が設定されていません</p>
+    <div className="space-y-4 animate-fadeIn">
+      <SubPageHeader
+        title="イベント貯金"
+        subtitle="目標に向けてコツコツ積み立てよう 🐷"
+        backTo="/"
+        rightAction={
           <button
-            onClick={() => { setEditingGoal(null); setIsAdding(true); }}
-            className="inline-flex items-center gap-1.5 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-bold rounded-xl shadow-md transition"
+            type="button"
+            onClick={openNewModal}
+            className="w-9 h-9 rounded-full bg-primary-600 hover:bg-primary-700 text-white flex items-center justify-center shadow-md shadow-primary-500/25 active:scale-95 transition"
+            aria-label="目標を追加"
           >
-            <Plus className="w-4 h-4" />
-            最初の目標を作成
+            <Plus className="w-5 h-5" />
           </button>
-        </Card>
+        }
+      />
+
+      <div className="flex items-start gap-2.5 p-3.5 rounded-2xl bg-purple-50 dark:bg-purple-950/30 border border-purple-100 dark:border-purple-900/50 text-xs text-purple-800 dark:text-purple-200">
+        <Info className="w-4 h-4 text-purple-500 shrink-0 mt-0.5" />
+        <p className="leading-relaxed">
+          イベント貯金は手元現金でのみ管理・プールされ、PayPay銀行などの口座残高やカード支払い予定とは連動しません。
+        </p>
+      </div>
+
+      {savingsGoals.length === 0 ? (
+        <div className="rounded-3xl p-8 bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 text-center space-y-3">
+          <p className="text-sm text-slate-400">まだイベント貯金がありません</p>
+          <button
+            type="button"
+            onClick={openNewModal}
+            className="px-4 py-2 rounded-xl bg-primary-600 text-white text-xs font-bold"
+          >
+            ＋ 最初の目標を作成
+          </button>
+        </div>
+      ) : (
+        <div className="space-y-3">
+          {savingsGoals.map((goal) => {
+            const pct =
+              goal.targetAmount > 0
+                ? Math.min(100, Math.round((goal.currentAmount / goal.targetAmount) * 100))
+                : 0;
+            const remaining = Math.max(0, goal.targetAmount - goal.currentAmount);
+
+            return (
+              <div
+                key={goal.id}
+                className="rounded-3xl p-4 bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 shadow-sm space-y-3"
+              >
+                <div className="flex items-start justify-between gap-2">
+                  <div className="flex items-center gap-3 min-w-0">
+                    <div className="w-10 h-10 rounded-2xl bg-pink-50 dark:bg-pink-950/50 text-pink-500 flex items-center justify-center shrink-0">
+                      <PiggyBank className="w-5 h-5" />
+                    </div>
+                    <div className="min-w-0">
+                      <h3 className="text-sm font-extrabold text-slate-900 dark:text-slate-50 truncate">
+                        {goal.title}
+                      </h3>
+                      <p className="text-[11px] text-slate-400">
+                        {goal.deadlineDate ? `期限 ${goal.deadlineDate}・` : ''}現金（手元）
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-1 shrink-0">
+                    <button
+                      type="button"
+                      onClick={() => openEditModal(goal)}
+                      className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-100 dark:hover:bg-slate-800 transition"
+                      aria-label="編集"
+                    >
+                      <Pencil className="w-4 h-4" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (confirm(`「${goal.title}」を削除しますか？`)) {
+                          deleteSavingsGoal(goal.id);
+                        }
+                      }}
+                      className="p-1.5 rounded-lg text-slate-400 hover:text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/40 transition"
+                      aria-label="削除"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </div>
+                </div>
+
+                <div className="space-y-1.5">
+                  <div className="flex items-center justify-between text-[11px] text-slate-500">
+                    <span>
+                      目標 ¥{goal.targetAmount.toLocaleString()} まで あと{' '}
+                      {remaining.toLocaleString()} 円
+                    </span>
+                    <span className="font-bold">達成率 {pct}%</span>
+                  </div>
+                  <div className="h-2.5 rounded-full bg-slate-100 dark:bg-slate-800 overflow-hidden">
+                    <div
+                      className="h-full rounded-full bg-gradient-to-r from-purple-500 to-pink-500 transition-all duration-500"
+                      style={{ width: `${pct}%` }}
+                    />
+                  </div>
+                  <p className="text-xs font-bold text-slate-700 dark:text-slate-200 tabular-nums">
+                    積立済み ¥{goal.currentAmount.toLocaleString()}
+                  </p>
+                </div>
+
+                <div className="grid grid-cols-2 gap-2.5 pt-1">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setMoveAmount('');
+                      setTxModalGoal({ goal, mode: 'deposit' });
+                    }}
+                    className="py-2.5 rounded-xl bg-primary-50 dark:bg-primary-950/50 text-primary-600 dark:text-primary-400 hover:bg-primary-100 text-xs font-bold transition"
+                  >
+                    + 現金から積立
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setMoveAmount('');
+                      setTxModalGoal({ goal, mode: 'withdraw' });
+                    }}
+                    className="py-2.5 rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 hover:bg-slate-200 text-xs font-bold transition"
+                  >
+                    - 引き出す
+                  </button>
+                </div>
+              </div>
+            );
+          })}
+        </div>
       )}
 
-      {(isAdding || editingGoal) && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-fadeIn">
-          <div className="bg-white dark:bg-slate-900 w-full max-w-md rounded-3xl p-6 shadow-2xl border border-slate-100 dark:border-slate-800 max-h-[90vh] overflow-y-auto">
-            <div className="flex justify-between items-center mb-4">
-              <h3 className="font-bold text-lg text-slate-800 dark:text-slate-100">
-                {editingGoal ? '目標を編集' : '目標を追加'}
-              </h3>
-              <button onClick={() => { setIsAdding(false); setEditingGoal(null); }} className="p-1 text-slate-400 hover:text-slate-600">
+      {/* Goal Add/Edit Modal */}
+      {isFormOpen && (
+        <div
+          className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-slate-900/50 backdrop-blur-sm animate-fadeIn p-0 sm:p-4"
+          onClick={() => setIsFormOpen(false)}
+        >
+          <div
+            className="w-full sm:max-w-md bg-white dark:bg-slate-900 rounded-t-3xl sm:rounded-3xl p-5 space-y-4 animate-slideUp"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between">
+              <h2 className="text-base font-extrabold text-slate-900 dark:text-slate-50">
+                {editingGoal ? '目標を編集' : '新しいイベント貯金'}
+              </h2>
+              <button
+                type="button"
+                onClick={() => setIsFormOpen(false)}
+                className="p-1.5 rounded-full text-slate-400 hover:bg-slate-100"
+              >
                 <X className="w-5 h-5" />
               </button>
             </div>
-            <form onSubmit={handleCreate} className="space-y-4">
+            <form onSubmit={handleSaveGoal} className="space-y-3">
               <div>
-                <label className="block text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1">目標名</label>
+                <label className="block text-xs font-bold text-slate-500 mb-1">タイトル</label>
                 <input
                   type="text"
-                  required
-                  placeholder="例: 旅行資金、引っ越し、パソコン購入"
                   value={title}
                   onChange={(e) => setTitle(e.target.value)}
-                  className="w-full px-3 py-2.5 text-sm bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500 text-slate-900 dark:text-slate-100"
+                  placeholder="例: あんちゃん旅行"
+                  className="w-full px-3.5 py-2.5 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-sm"
+                  required
                 />
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1">目標額（円）</label>
+                  <label className="block text-xs font-bold text-slate-500 mb-1">目標金額</label>
                   <input
                     type="number"
-                    required
-                    min="1"
-                    placeholder="100000"
                     value={targetAmount}
                     onChange={(e) => setTargetAmount(e.target.value)}
-                    className="w-full px-3 py-2.5 text-sm bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500 text-slate-900 dark:text-slate-100"
+                    placeholder="150000"
+                    className="w-full px-3.5 py-2.5 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-sm"
+                    required
                   />
                 </div>
                 <div>
-                  <label className="block text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1">現在額（円）</label>
+                  <label className="block text-xs font-bold text-slate-500 mb-1">現在の積立額</label>
                   <input
                     type="number"
-                    min="0"
-                    placeholder="0"
                     value={currentAmount}
                     onChange={(e) => setCurrentAmount(e.target.value)}
-                    className="w-full px-3 py-2.5 text-sm bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500 text-slate-900 dark:text-slate-100"
+                    className="w-full px-3.5 py-2.5 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-sm"
                   />
                 </div>
               </div>
               <div>
-                <label className="block text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1">目標期日（任意）</label>
+                <label className="block text-xs font-bold text-slate-500 mb-1">期限（任意）</label>
                 <input
                   type="date"
                   value={deadlineDate}
                   onChange={(e) => setDeadlineDate(e.target.value)}
-                  className="w-full px-3 py-2.5 text-sm bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500 text-slate-900 dark:text-slate-100"
+                  className="w-full px-3.5 py-2.5 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-sm"
                 />
               </div>
-              <div>
-                <label className="block text-xs font-semibold text-slate-500 dark:text-slate-400 mb-1">連携口座（任意）</label>
-                <select
-                  value={linkedAccountId}
-                  onChange={(e) => setLinkedAccountId(e.target.value)}
-                  className="w-full px-3 py-2.5 text-sm bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl focus:outline-none focus:ring-2 focus:ring-emerald-500 text-slate-900 dark:text-slate-100"
-                >
-                  <option value="">連携しない</option>
-                  {accounts.filter(a => a.isActive && a.includeInAssets).map((acc) => (
-                    <option key={acc.id} value={acc.id}>
-                      {acc.name}
-                    </option>
-                  ))}
-                </select>
-                <p className="mt-1 text-xs text-slate-400">口座残高と同期して進捗を自動更新できます</p>
-              </div>
-              <div className="pt-2">
-                <button
-                  type="submit"
-                  className="w-full py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl shadow-md transition"
-                >
-                  {editingGoal ? '保存する' : '登録する'}
-                </button>
-              </div>
+              <button
+                type="submit"
+                className="w-full py-3 rounded-2xl bg-primary-600 text-white font-bold text-sm"
+              >
+                保存する
+              </button>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Deposit / Withdraw Modal */}
+      {txModalGoal && (
+        <div
+          className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-slate-900/50 backdrop-blur-sm animate-fadeIn p-0 sm:p-4"
+          onClick={() => setTxModalGoal(null)}
+        >
+          <div
+            className="w-full sm:max-w-sm bg-white dark:bg-slate-900 rounded-t-3xl sm:rounded-3xl p-5 space-y-4 animate-slideUp"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between">
+              <h2 className="text-base font-extrabold text-slate-900 dark:text-slate-50">
+                {txModalGoal.mode === 'deposit' ? '現金から積立' : '貯金を引き出す'}
+              </h2>
+              <button
+                type="button"
+                onClick={() => setTxModalGoal(null)}
+                className="p-1.5 rounded-full text-slate-400 hover:bg-slate-100"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <p className="text-xs text-slate-500">対象: {txModalGoal.goal.title}</p>
+            <form onSubmit={handleMoveFunds} className="space-y-3">
+              <input
+                type="number"
+                inputMode="numeric"
+                value={moveAmount}
+                onChange={(e) => setMoveAmount(e.target.value)}
+                placeholder="金額を入力（例: 1000）"
+                className="w-full px-4 py-3 rounded-2xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-lg font-bold"
+                autoFocus
+                required
+              />
+              <button
+                type="submit"
+                className="w-full py-3 rounded-2xl bg-primary-600 text-white font-bold text-sm"
+              >
+                {txModalGoal.mode === 'deposit' ? '積立を実行' : '引き出しを実行'}
+              </button>
             </form>
           </div>
         </div>
