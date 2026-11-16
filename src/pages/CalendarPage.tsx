@@ -2,17 +2,19 @@ import React, { useState } from 'react';
 import { useApp } from '@/contexts/AppContext';
 import { Card } from '@/components/common/Card';
 import { isExcludedFromCashFlow, isExchangeCategory } from '@/services/calculation/balanceEngine';
-import { ChevronLeft, ChevronRight, ArrowUpRight, ArrowDownRight, CalendarDays } from 'lucide-react';
+import { ChevronLeft, ChevronRight, ArrowUpRight, ArrowDownRight, CalendarDays, X } from 'lucide-react';
 
 export const CalendarPage: React.FC = () => {
-  const { transactions, categories, plannedExpenses, selectedYearMonth, setSelectedYearMonth } = useApp();
+  const { transactions, categories, accounts, plannedExpenses, selectedYearMonth, setSelectedYearMonth } = useApp();
   const [yearStr, monthStr] = selectedYearMonth.split('-');
   const year = parseInt(yearStr, 10);
   const month = parseInt(monthStr, 10);
   const [selectedDay, setSelectedDay] = useState<string>(() => `${selectedYearMonth}-01`);
+  const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
 
   const categoryMap = new Map(categories.map((c) => [c.id, c]));
   const categoryNameMap = new Map(categories.map((c) => [c.id, c.name]));
+  const accountMap = new Map(accounts.map((a) => [a.id, a]));
   const firstDayOfWeek = new Date(year, month - 1, 1).getDay();
   const daysInMonth = new Date(year, month, 0).getDate();
 
@@ -119,7 +121,10 @@ export const CalendarPage: React.FC = () => {
                 return (
                   <button
                     key={cell.dateStr}
-                    onClick={() => setSelectedDay(cell.dateStr)}
+                    onClick={() => {
+                      setSelectedDay(cell.dateStr);
+                      setIsDetailModalOpen(true);
+                    }}
                     className={`h-14 sm:h-18 p-1.5 sm:p-2 rounded-xl border text-left transition flex flex-col justify-between min-h-0 ${
                       isSelected
                         ? 'border-emerald-500 bg-emerald-50/60 dark:bg-emerald-950/40 ring-2 ring-emerald-500/20'
@@ -229,6 +234,128 @@ export const CalendarPage: React.FC = () => {
           </Card>
         </div>
       </div>
+
+      {/* 日付タップ時の明細モーダル / ボトムドロワー */}
+      {isDetailModalOpen && (
+        <div
+          className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-slate-900/60 backdrop-blur-sm animate-fadeIn p-0 sm:p-4"
+          onClick={() => setIsDetailModalOpen(false)}
+        >
+          <div
+            className="w-full sm:max-w-lg bg-white dark:bg-slate-900 rounded-t-3xl sm:rounded-3xl shadow-2xl border border-slate-100 dark:border-slate-800 max-h-[82vh] flex flex-col overflow-hidden pb-safe"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100 dark:border-slate-800">
+              <div>
+                <h3 className="text-base font-bold text-slate-800 dark:text-slate-100">
+                  {selectedDay} の利用明細・予定
+                </h3>
+                <p className="text-xs text-slate-400 mt-0.5">
+                  利用日基準（取引 {selectedDayTransactions.length}件 / 予定 {selectedDayPlanned.length}件）
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsDetailModalOpen(false)}
+                className="p-2 rounded-full text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition"
+                aria-label="閉じる"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="p-5 overflow-y-auto space-y-4">
+              {selectedDayTransactions.length > 0 && (
+                <div>
+                  <h4 className="text-xs font-bold text-slate-500 dark:text-slate-400 mb-2 flex items-center gap-1">
+                    <ArrowDownRight className="w-3.5 h-3.5" />
+                    取引 ({selectedDayTransactions.length}件)
+                  </h4>
+                  <div className="space-y-2">
+                    {selectedDayTransactions.map((tx) => {
+                      const cat = tx.categoryId ? categoryMap.get(tx.categoryId) : undefined;
+                      const acc = accountMap.get(tx.accountId);
+                      return (
+                        <div
+                          key={tx.id}
+                          className="p-3 rounded-xl bg-slate-50 dark:bg-slate-800/60 border border-slate-100 dark:border-slate-800 flex items-center justify-between"
+                        >
+                          <div className="flex items-center gap-2.5 min-w-0">
+                            <div
+                              className="w-8 h-8 rounded-lg flex items-center justify-center text-white shrink-0"
+                              style={{ backgroundColor: cat?.color || '#94a3b8' }}
+                            >
+                              {tx.type === 'income' ? (
+                                <ArrowUpRight className="w-4 h-4" />
+                              ) : (
+                                <ArrowDownRight className="w-4 h-4" />
+                              )}
+                            </div>
+                            <div className="min-w-0">
+                              <p className="font-bold text-sm text-slate-800 dark:text-slate-100 truncate">
+                                {tx.description || '無題'}
+                              </p>
+                              <p className="text-xs text-slate-400 truncate">
+                                {cat?.name || 'カテゴリなし'} • {acc?.name || '不明な口座'}
+                              </p>
+                            </div>
+                          </div>
+                          <span
+                            className={`font-bold text-sm shrink-0 ml-2 ${
+                              tx.type === 'income'
+                                ? 'text-emerald-600 dark:text-emerald-400'
+                                : 'text-slate-800 dark:text-slate-100'
+                            }`}
+                          >
+                            {tx.type === 'income' ? '+' : '-'}¥{tx.amount.toLocaleString()}
+                          </span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {selectedDayPlanned.length > 0 && (
+                <div>
+                  <h4 className="text-xs font-bold text-slate-500 dark:text-slate-400 mb-2 flex items-center gap-1">
+                    <CalendarDays className="w-3.5 h-3.5" />
+                    支出予定 ({selectedDayPlanned.length}件)
+                  </h4>
+                  <div className="space-y-2">
+                    {selectedDayPlanned.map((p) => (
+                      <div
+                        key={p.id}
+                        className="p-3 rounded-xl bg-amber-50 dark:bg-amber-900/30 border border-amber-100 dark:border-amber-800 flex items-center justify-between"
+                      >
+                        <div className="min-w-0">
+                          <p className="font-bold text-sm text-slate-800 dark:text-slate-100 truncate">
+                            {p.description}
+                          </p>
+                          {p.categoryId && (
+                            <p className="text-xs text-slate-400 truncate">
+                              {categories.find((c) => c.id === p.categoryId)?.name || 'カテゴリなし'}
+                            </p>
+                          )}
+                        </div>
+                        <span className="font-bold text-sm text-slate-700 dark:text-slate-200 shrink-0 ml-2">
+                          ¥{p.amount.toLocaleString()}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {selectedDayTransactions.length === 0 && selectedDayPlanned.length === 0 && (
+                <p className="py-10 text-center text-sm text-slate-400">
+                  この日の取引・予定はありません
+                </p>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

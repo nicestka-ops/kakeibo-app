@@ -132,8 +132,15 @@ export const SettingsPage: React.FC = () => {
 
       const result = importTransactionsCSV(text, accReverseMap, catReverseMap);
       if (result.success && result.data.length > 0) {
-        importTransactionsBatch(result.data, result.createdAccounts, result.createdCategories);
+        const { addedCount, skippedCount } = importTransactionsBatch(
+          result.data,
+          result.createdAccounts,
+          result.createdCategories
+        );
         const notes: string[] = [];
+        if (skippedCount > 0) {
+          notes.push(`重複データ ${skippedCount} 件をスキップしました`);
+        }
         if (result.createdAccounts && result.createdAccounts.length > 0) {
           notes.push(`決済手段 ${result.createdAccounts.length} 件を自動追加しました`);
         }
@@ -144,7 +151,7 @@ export const SettingsPage: React.FC = () => {
           notes.push(`スキップ/警告 ${result.errors.length} 件:\n${result.errors.slice(0, 5).join('\n')}`);
         }
         alert(
-          `${result.data.length} 件の取引データを正常にインポートしました。` +
+          `${addedCount} 件の取引データを正常にインポートしました。` +
             (notes.length > 0 ? `\n\n${notes.join('\n')}` : '')
         );
       } else {

@@ -29,6 +29,7 @@ import {
   FinancialSummary,
   MonthlyCashFlow,
 } from '@/services/calculation/balanceEngine';
+import { buildTransactionDuplicateKey } from '@/services/migration/csvImporter';
 
 /** 振替入力用の追加フィールド */
 export interface TransferInput {
@@ -71,7 +72,7 @@ interface AppContextType {
     newTransactions: Transaction[],
     newAccounts?: Account[],
     newCategories?: Category[]
-  ) => void;
+  ) => { addedCount: number; skippedCount: number };
   resetToDefaultData: () => void;
   syncStatus: SyncStatus;
   lastSyncedAt: string | null;
@@ -607,16 +608,35 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     newTransactions: Transaction[],
     newAccounts: Account[] = [],
     newCategories: Category[] = []
-  ) => {
+  ): { addedCount: number; skippedCount: number } => {
     if (newAccounts.length > 0) {
       setAccounts((prev) => [...prev, ...newAccounts]);
     }
     if (newCategories.length > 0) {
       setCategories((prev) => [...prev, ...newCategories]);
     }
-    if (newTransactions.length > 0) {
-      setTransactions((prev) => [...newTransactions, ...prev]);
+
+    const existingKeys = new Set(
+      latestPayloadRef.current.transactions.map((tx) => buildTransactionDuplicateKey(tx))
+    );
+    const uniqueToAdd: Transaction[] = [];
+    let skippedCount = 0;
+
+    for (const tx of newTransactions) {
+      const key = buildTransactionDuplicateKey(tx);
+      if (existingKeys.has(key)) {
+        skippedCount += 1;
+      } else {
+        existingKeys.add(key);
+        uniqueToAdd.push(tx);
+      }
     }
+
+    if (uniqueToAdd.length > 0) {
+      setTransactions((prev) => [...uniqueToAdd, ...prev]);
+    }
+
+    return { addedCount: uniqueToAdd.length, skippedCount };
   };
 
   const resetToDefaultData = () => {

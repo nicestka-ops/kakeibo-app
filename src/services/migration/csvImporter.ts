@@ -263,25 +263,53 @@ export function importTransactionsCSV(
   return result;
 }
 
+function formatCsvTypeLabel(type: Transaction['type']): string {
+  switch (type) {
+    case 'income':
+      return '収入';
+    case 'expense':
+      return '支出';
+    case 'transfer':
+    case 'transfer_out':
+    case 'transfer_in':
+      return '振替';
+    case 'card_payment':
+      return '引落';
+    case 'adjustment':
+      return '調整';
+    default:
+      return '支出';
+  }
+}
+
+export function buildTransactionDuplicateKey(tx: Pick<Transaction, 'date' | 'timestamp' | 'type' | 'amount' | 'accountId' | 'description'>): string {
+  const ts = tx.timestamp ? tx.timestamp.trim() : '';
+  return `${ts}|${tx.date}|${Math.round(Math.abs(tx.amount))}|${tx.type}|${tx.accountId}|${tx.description.trim()}`;
+}
+
 export function exportTransactionsCSV(
   transactions: Transaction[],
   accountMap: Map<string, string>,
   categoryMap: Map<string, string>
 ): string {
-  const header = ['date', 'type', 'amount', 'account_name', 'category_name', 'description', 'id'];
+  const header = ['タイムスタンプ', '金額', 'タイプ', '決済手段', 'カテゴリー', '利用日', '内容'];
   const lines = [header.join(',')];
 
   for (const tx of transactions) {
+    const timestamp = tx.timestamp || tx.createdAt || `${tx.date}T00:00:00.000Z`;
+    const typeLabel = formatCsvTypeLabel(tx.type);
     const accName = accountMap.get(tx.accountId) || '';
     const catName = tx.categoryId ? categoryMap.get(tx.categoryId) || '' : '';
+    const escape = (v: string) => `"${v.replace(/"/g, '""')}"`;
+
     const line = [
-      `"${tx.date}"`,
-      `"${tx.type}"`,
-      tx.amount,
-      `"${accName.replace(/"/g, '""')}"`,
-      `"${catName.replace(/"/g, '""')}"`,
-      `"${tx.description.replace(/"/g, '""')}"`,
-      `"${tx.id}"`,
+      escape(timestamp),
+      Math.round(Math.abs(tx.amount)),
+      escape(typeLabel),
+      escape(accName),
+      escape(catName),
+      escape(tx.date),
+      escape(tx.description || ''),
     ];
     lines.push(line.join(','));
   }

@@ -1,9 +1,11 @@
 // Service Worker for kakeibo PWA
-const CACHE_NAME = 'kakeibo-v3';
+const CACHE_NAME = 'kakeibo-v4';
 const STATIC_ASSETS = [
   './',
   './index.html',
-  './manifest.webmanifest',
+  './manifest.webmanifest?v=4',
+  './icon-192.png?v=4',
+  './icon-512.png?v=4',
 ];
 
 // Install event - cache static assets
