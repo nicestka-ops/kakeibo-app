@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Outlet, useLocation } from 'react-router-dom';
 import { Header } from '@/components/common/Header';
 import { Sidebar } from '@/components/common/Sidebar';
@@ -6,6 +6,28 @@ import { BottomNav } from '@/components/common/BottomNav';
 import { TransactionFormModal } from '@/components/forms/TransactionFormModal';
 import { PlannedExpenseModal } from '@/components/forms/PlannedExpenseModal';
 import { TrendingDown, TrendingUp, ArrowLeftRight, CalendarClock, X } from 'lucide-react';
+
+const TAB_ORDER: Record<string, number> = {
+  '/': 0,
+  '/transactions': 1,
+  '/calendar': 2,
+  '/analytics': 3,
+  '/settings': 4,
+};
+
+function getRouteTransitionClass(prevPath: string, nextPath: string): string {
+  if (prevPath === nextPath) return 'animate-pageEnter';
+  const prevTab = TAB_ORDER[prevPath];
+  const nextTab = TAB_ORDER[nextPath];
+  if (prevTab !== undefined && nextTab !== undefined) {
+    return nextTab > prevTab ? 'animate-slideFromRight' : 'animate-slideFromLeft';
+  }
+  const prevDepth = prevPath.split('/').filter(Boolean).length;
+  const nextDepth = nextPath.split('/').filter(Boolean).length;
+  if (nextDepth > prevDepth) return 'animate-pushIn';
+  if (nextDepth < prevDepth) return 'animate-slideFromLeft';
+  return 'animate-pageEnter';
+}
 
 export const AppLayout: React.FC = () => {
   const [isRegisterSheetOpen, setIsRegisterSheetOpen] = useState(false);
@@ -15,9 +37,12 @@ export const AppLayout: React.FC = () => {
   const [plannedInitialDate, setPlannedInitialDate] = useState<string | undefined>(undefined);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const location = useLocation();
+  const prevPathRef = useRef<string>(location.pathname);
+  const transitionClass = getRouteTransitionClass(prevPathRef.current, location.pathname);
 
   useEffect(() => {
     setSidebarOpen(false);
+    prevPathRef.current = location.pathname;
   }, [location.pathname]);
 
   useEffect(() => {
@@ -72,10 +97,10 @@ export const AppLayout: React.FC = () => {
           sidebarOpen={sidebarOpen}
         />
 
-        <main className="flex-1 px-4 sm:px-6 lg:px-8 pt-3 md:pt-5 pb-24 md:pb-10">
+        <main className="flex-1 px-4 sm:px-6 lg:px-8 pt-3 md:pt-5 pb-24 md:pb-10 overflow-x-hidden">
           <div
             key={location.pathname}
-            className="max-w-3xl lg:max-w-5xl mx-auto w-full animate-pageEnter"
+            className={`max-w-3xl lg:max-w-5xl mx-auto w-full ${transitionClass}`}
           >
             <Outlet />
           </div>

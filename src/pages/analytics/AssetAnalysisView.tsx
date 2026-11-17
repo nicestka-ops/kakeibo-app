@@ -1,8 +1,7 @@
-import React, { useMemo, useState } from 'react';
+import React, { useMemo } from 'react';
 import { useApp } from '@/contexts/AppContext';
 import { useTheme } from '@/contexts/ThemeContext';
 import { SubPageHeader } from '@/components/common/SubPageHeader';
-import { generateAssetTrend } from '@/services/calculation/balanceEngine';
 import {
   calculateLinkedCardBillingForBank,
   getMonthlyPlannedExpenses,
@@ -14,12 +13,6 @@ import {
   PieChart,
   Pie,
   Cell,
-  ComposedChart,
-  Bar,
-  Line,
-  XAxis,
-  YAxis,
-  CartesianGrid,
   Tooltip,
   ResponsiveContainer,
 } from 'recharts';
@@ -48,7 +41,6 @@ export const AssetAnalysisView: React.FC = () => {
     setSelectedYearMonth,
   } = useApp();
   const { customColors } = useTheme();
-  const [trendRange, setTrendRange] = useState<3 | 6 | 9>(6);
 
   const categoryNameMap = useMemo(() => new Map(categories.map((c) => [c.id, c.name])), [categories]);
   const todayStr = getTodayDateString();
@@ -117,15 +109,6 @@ export const AssetAnalysisView: React.FC = () => {
       return { acc, inAmt, outAmt };
     });
   }, [assetAccounts, transactions, selectedYearMonth]);
-
-  const assetTrend = useMemo(
-    () =>
-      generateAssetTrend(accounts, transactions, trendRange, categoryNameMap).map((p) => ({
-        ...p,
-        label: `${parseInt(p.month.slice(5), 10)}月`,
-      })),
-    [accounts, transactions, trendRange, categoryNameMap]
-  );
 
   return (
     <div className="space-y-4 animate-fadeIn">
@@ -254,55 +237,6 @@ export const AssetAnalysisView: React.FC = () => {
               </div>
             </div>
           ))}
-        </div>
-      </div>
-
-      {/* 総資産の推移 */}
-      <div className="rounded-3xl p-5 bg-white dark:bg-slate-900 border border-slate-100 dark:border-slate-800 shadow-sm space-y-3">
-        <div className="flex items-center justify-between gap-2">
-          <div>
-            <h2 className="text-sm font-extrabold text-slate-900 dark:text-slate-50">
-              総資産の推移
-            </h2>
-            <p className="text-[10px] text-slate-400">
-              各月末時点の取引履歴に基づく資産・純資産の推移
-            </p>
-          </div>
-          <div className="inline-flex p-0.5 rounded-full bg-slate-100 dark:bg-slate-800">
-            {([3, 6, 9] as const).map((n) => (
-              <button
-                key={n}
-                type="button"
-                onClick={() => setTrendRange(n)}
-                className={`px-2.5 py-1 rounded-full text-[10px] font-bold transition ${
-                  trendRange === n
-                    ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-sm'
-                    : 'text-slate-500'
-                }`}
-              >
-                {n}ヶ月
-              </button>
-            ))}
-          </div>
-        </div>
-        <div className="h-48">
-          <ResponsiveContainer width="100%" height="100%">
-            <ComposedChart data={assetTrend} margin={{ top: 5, right: 5, left: -18, bottom: 0 }}>
-              <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
-              <XAxis dataKey="label" tick={{ fontSize: 10, fill: '#94a3b8' }} axisLine={false} tickLine={false} />
-              <YAxis tick={{ fontSize: 10, fill: '#94a3b8' }} axisLine={false} tickLine={false} />
-              <Tooltip formatter={(v: number) => `¥${v.toLocaleString()}`} />
-              <Bar dataKey="totalAssets" name="総資産" fill={customColors.assets} radius={[4, 4, 0, 0]} />
-              <Line
-                type="monotone"
-                dataKey="netAssets"
-                name="純資産"
-                stroke="#10b981"
-                strokeWidth={2}
-                dot={{ r: 3 }}
-              />
-            </ComposedChart>
-          </ResponsiveContainer>
         </div>
       </div>
     </div>

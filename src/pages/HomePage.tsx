@@ -55,6 +55,7 @@ export const HomePage: React.FC = () => {
 
   // 2カード（「今月の収支」「先月対決」）を8〜9割重ねて上下入れ替え
   const [activeHero, setActiveHero] = useState<HeroCardId>('summary');
+  const [hasSwappedHero, setHasSwappedHero] = useState(false);
 
   const [battleMetric, setBattleMetric] = useState<'expense' | 'net'>('expense');
   const [summaryTab, setSummaryTab] = useState<'actual' | 'forecast'>('actual');
@@ -63,6 +64,7 @@ export const HomePage: React.FC = () => {
   const [isCardPaymentExpanded, setIsCardPaymentExpanded] = useState(false);
 
   const handleSwapHeroCards = () => {
+    setHasSwappedHero(true);
     setActiveHero((prev) => (prev === 'summary' ? 'battle' : 'summary'));
   };
 
@@ -217,7 +219,7 @@ export const HomePage: React.FC = () => {
   return (
     <div className="space-y-4">
       {/* 2枚を8〜9割重ねたスタックカード（「今月の収支」＆「先月対決」タップで上下入替） */}
-      <div className="pt-10 grid grid-cols-1 items-start">
+      <div className="pt-12 grid grid-cols-1 items-start">
         {/* カード1: 今月の収支 */}
         <div
           onClick={handleSwapHeroCards}
@@ -230,10 +232,10 @@ export const HomePage: React.FC = () => {
             gridArea: '1 / 1',
             background: `linear-gradient(135deg, ${customColors.summary} 0%, #2563EB 100%)`,
           }}
-          className={`rounded-3xl p-4 sm:p-5 text-white cursor-pointer select-none relative overflow-hidden transition-all duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] ${
+          className={`min-h-[248px] sm:min-h-[268px] flex flex-col justify-between rounded-3xl p-5 sm:p-6 text-white cursor-pointer select-none relative overflow-hidden ${
             isSummaryFront
-              ? 'z-20 translate-y-0 scale-100 shadow-xl opacity-100'
-              : 'z-10 -translate-y-10 scale-[0.95] shadow-md opacity-95 hover:-translate-y-11'
+              ? `z-20 shadow-2xl ${hasSwappedHero ? 'animate-cardBringFront' : 'translate-y-0 scale-100'}`
+              : `z-10 shadow-md opacity-95 ${hasSwappedHero ? 'animate-cardSendBack' : '-translate-y-12 scale-[0.94]'}`
           }`}
         >
           <div className="flex items-center justify-between mb-1">
@@ -336,10 +338,10 @@ export const HomePage: React.FC = () => {
             if (e.key === 'Enter' || e.key === ' ') handleSwapHeroCards();
           }}
           style={{ gridArea: '1 / 1' }}
-          className={`rounded-3xl p-4 sm:p-5 bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 cursor-pointer select-none space-y-3 transition-all duration-300 ease-[cubic-bezier(0.22,1,0.36,1)] ${
+          className={`min-h-[248px] sm:min-h-[268px] flex flex-col justify-between rounded-3xl p-5 sm:p-6 bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 cursor-pointer select-none space-y-3 ${
             !isSummaryFront
-              ? 'z-20 translate-y-0 scale-100 shadow-xl opacity-100'
-              : 'z-10 -translate-y-10 scale-[0.95] shadow-md opacity-95 hover:-translate-y-11'
+              ? `z-20 shadow-2xl ${hasSwappedHero ? 'animate-cardBringFront' : 'translate-y-0 scale-100'}`
+              : `z-10 shadow-md opacity-95 ${hasSwappedHero ? 'animate-cardSendBack' : '-translate-y-12 scale-[0.94]'}`
           }`}
         >
           <div className="flex items-center justify-between gap-2">
