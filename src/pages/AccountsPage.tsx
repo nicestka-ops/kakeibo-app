@@ -3,7 +3,6 @@ import { useApp } from '@/contexts/AppContext';
 import { Card } from '@/components/common/Card';
 import { Account, AccountType } from '@/types';
 import { Building2, Banknote, CreditCard, Wallet, Plus, X, Trash2, Edit2, PiggyBank } from 'lucide-react';
-import { ResponsiveContainer, AreaChart, Area, XAxis, YAxis, Tooltip } from 'recharts';
 
 export const AccountsPage: React.FC = () => {
   const { accounts, accountBalances, financialSummary, addAccount, updateAccount } = useApp();
@@ -90,14 +89,6 @@ export const AccountsPage: React.FC = () => {
       updateAccount(id, { isActive: false });
     }
   };
-
-  const assetTrendData = [
-    { name: '4ヶ月前', total: Math.round(financialSummary.netAssets * 0.85) },
-    { name: '3ヶ月前', total: Math.round(financialSummary.netAssets * 0.9) },
-    { name: '2ヶ月前', total: Math.round(financialSummary.netAssets * 0.94) },
-    { name: '先月', total: Math.round(financialSummary.netAssets * 0.97) },
-    { name: '現在', total: financialSummary.netAssets },
-  ];
 
   return (
     <div className="space-y-5 animate-fadeIn px-1 sm:px-0">
@@ -215,41 +206,6 @@ export const AccountsPage: React.FC = () => {
               </div>
             );
           })}
-        </div>
-      </Card>
-
-      {/* Asset Trend Chart */}
-      <Card title="純資産の推移">
-        <div className="h-64 sm:h-72 w-full pt-2">
-          <ResponsiveContainer width="100%" height="100%">
-            <AreaChart data={assetTrendData} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
-              <defs>
-                <linearGradient id="assetGrad" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor="#10b981" stopOpacity={0.4} />
-                  <stop offset="95%" stopColor="#10b981" stopOpacity={0.0} />
-                </linearGradient>
-              </defs>
-              <XAxis dataKey="name" stroke="#94a3b8" fontSize={12} tickLine={false} />
-              <YAxis
-                stroke="#94a3b8"
-                fontSize={12}
-                tickLine={false}
-                tickFormatter={(v) => `¥${Math.round(v / 10000)}万`}
-              />
-              <Tooltip
-                formatter={(val: number) => [`¥${Number(val).toLocaleString()}`, '純資産']}
-                contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }}
-              />
-              <Area
-                type="monotone"
-                dataKey="total"
-                stroke="#10b981"
-                strokeWidth={2}
-                fillOpacity={1}
-                fill="url(#assetGrad)"
-              />
-            </AreaChart>
-          </ResponsiveContainer>
         </div>
       </Card>
 
