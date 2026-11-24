@@ -2,6 +2,7 @@ import React, { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useApp } from '@/contexts/AppContext';
 import { useTheme } from '@/contexts/ThemeContext';
+import { SpendingAnnouncement } from '@/components/duolog/SpendingAnnouncement';
 import {
   calculateEndOfMonthForecast,
   calculateLastMonthComparison,
@@ -218,6 +219,7 @@ export const HomePage: React.FC = () => {
 
   return (
     <div className="space-y-4">
+      <SpendingAnnouncement />
       {/* 2枚を8〜9割重ねたスタックカード（「今月の収支」＆「先月対決」タップで上下入替） */}
       <div className="pt-12 grid grid-cols-1 items-start">
         {/* カード1: 今月の収支 */}

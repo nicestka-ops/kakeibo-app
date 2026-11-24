@@ -1,5 +1,7 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { useApp } from '@/contexts/AppContext';
+import { fetchDuologEvents, eventSpansDay, type DuologEvent } from '@/services/duologClient';
 import { isExcludedFromCashFlow, isExchangeCategory } from '@/services/calculation/balanceEngine';
 import {
   getMonthlyPlannedExpenses,
@@ -25,10 +27,27 @@ export const CalendarPage: React.FC = () => {
   const year = parseInt(yearStr, 10);
   const month = parseInt(monthStr, 10);
 
+  const [searchParams] = useSearchParams();
+  const initialDateParam = searchParams.get('date');
+
   const [selectedDay, setSelectedDay] = useState<string>(() => {
+    if (initialDateParam && /^\d{4}-\d{2}-\d{2}$/.test(initialDateParam)) return initialDateParam;
     const today = new Date().toISOString().split('T')[0];
     return today.startsWith(selectedYearMonth) ? today : `${selectedYearMonth}-01`;
   });
+  const [duologEvents, setDuologEvents] = useState<DuologEvent[]>([]);
+
+  useEffect(() => {
+    fetchDuologEvents().then(setDuologEvents);
+  }, []);
+
+  useEffect(() => {
+    if (initialDateParam && /^\d{4}-\d{2}-\d{2}$/.test(initialDateParam)) {
+      setSelectedYearMonth(initialDateParam.slice(0, 7));
+      setSelectedDay(initialDateParam);
+      setIsDetailModalOpen(true);
+    }
+  }, [initialDateParam, setSelectedYearMonth]);
   const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
   const [showPlannedBreakdown, setShowPlannedBreakdown] = useState(false);
 
@@ -97,6 +116,11 @@ export const CalendarPage: React.FC = () => {
   const selectedDayPlanned = useMemo(
     () => plannedExpenses.filter((p) => p.dueDate === selectedDay),
     [plannedExpenses, selectedDay]
+  );
+
+  const selectedDayDuologEvents = useMemo(
+    () => duologEvents.filter((ev) => eventSpansDay(ev, selectedDay)),
+    [duologEvents, selectedDay]
   );
 
   const handleJumpToday = () => {
@@ -428,7 +452,36 @@ export const CalendarPage: React.FC = () => {
                 </div>
               )}
 
-              {selectedDayTransactions.length === 0 && selectedDayPlanned.length === 0 && (
+              {selectedDayDuologEvents.length > 0 && (
+                <div className="space-y-2">
+                  <p className="text-xs font-bold text-slate-400">DuoLog の予定（選択日）</p>
+                  <div className="space-y-1.5">
+                    {selectedDayDuologEvents.map((ev) => (
+                      <div
+                        key={ev.id}
+                        className="flex items-center justify-between p-3 rounded-2xl bg-indigo-50/70 dark:bg-indigo-950/30 border border-indigo-100 dark:border-indigo-900/40"
+                      >
+                        <div className="min-w-0">
+                          <p className="text-sm font-bold text-slate-800 dark:text-slate-100 truncate">
+                            {ev.title}
+                          </p>
+                          <p className="text-[11px] text-slate-400">
+                            {ev.is_all_day ? '終日' : (ev.start_time || '').slice(11, 16)}
+                            {ev.location ? ` ・ ${ev.location}` : ''}
+                          </p>
+                        </div>
+                        <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-indigo-100 dark:bg-indigo-900/50 text-indigo-700 dark:text-indigo-300 shrink-0 ml-2">
+                          {ev.type === 'us' ? 'ふたり' : ev.type === 'partner' ? 'パートナー' : '自分'}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {selectedDayTransactions.length === 0 &&
+                selectedDayPlanned.length === 0 &&
+                selectedDayDuologEvents.length === 0 && (
                 <p className="py-6 text-center text-sm text-slate-400">
                   この日の取引・予定はありません
                 </p>
