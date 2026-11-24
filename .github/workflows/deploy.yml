@@ -41,6 +41,9 @@ jobs:
           VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
           VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
           VITE_ALLOWED_EMAILS: ${{ secrets.VITE_ALLOWED_EMAILS }}
+          VITE_DUOLOG_SUPABASE_URL: ${{ secrets.VITE_DUOLOG_SUPABASE_URL }}
+          VITE_DUOLOG_SUPABASE_ANON_KEY: ${{ secrets.VITE_DUOLOG_SUPABASE_ANON_KEY }}
+          VITE_DUOLOG_SHARE_KEY: ${{ secrets.VITE_DUOLOG_SHARE_KEY }}
 
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
